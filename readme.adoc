@@ -1,0 +1,13 @@
+= README
+
+Device: M5PaperS3
+
+Download M5 burner
+Install mpremote
+
+
+= Credits
+
+Pronounciation dictionary: https://github.com/open-dict-data/ipa-dict/blob/master/data/en_UK.txt
+
+Definitions dictionary: https://github.com/CloudBytes-Academy/English-Dictionary-Open-Source
