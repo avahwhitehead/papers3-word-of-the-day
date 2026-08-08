@@ -11,9 +11,9 @@ dictionary2_path = "resources/dictionary.csv"
 
 phonetics_path = "resources/phonetics.csv"
 
-class WordJsonEncoder(json.JSONEncoder):
+class WordInfoJsonEncoder(json.JSONEncoder):
 	def default(self, o):
-		if not isinstance(o, Word):
+		if not isinstance(o, WordInfo):
 			return super().default(o)
 
 		return {
@@ -24,7 +24,7 @@ class WordJsonEncoder(json.JSONEncoder):
 			"examples": [e for e in o.examples if e],
 		}
 
-class Word:
+class WordInfo:
 	word: str = None
 
 	phonetics: list[str] = None
@@ -51,26 +51,32 @@ class Word:
 		self.examples.append(example)
 
 
-def populate_dictionary_definitions(dictionary_path: str, words: dict[str, Word]) -> None:
+def populate_dictionary_definitions(dictionary_path: str, words: dict[str, WordInfo]) -> None:
 	with open(dictionary_path) as dictionary_file:
-		dict_reader = csv.reader(dictionary_file, delimiter=',', quotechar='"')
+		reader = csv.reader(dictionary_file, delimiter=',', quotechar='"')
 
-		for row in dict_reader:
+		for row in reader:
 			(word, part_of_speech, definition, example) = pad_list(row, 4)
 
 			normalised_word = normalise_word(word)
 			if not normalised_word in words: continue
 
-			words[normalised_word].add_definition(definition)
-			words[normalised_word].part_of_speech = part_of_speech
-			words[normalised_word].add_example(example)
+			word_info = words[normalised_word]
 
+			if definition:
+				word_info.add_definition(definition)
 
-def populate_dictionary_pronounciations(phonetics_path: str, words: dict[str, Word]) -> None:
+			if not word_info.part_of_speech:
+				word_info.part_of_speech = part_of_speech
+
+			if example:
+				word_info.add_example(example)
+
+def populate_dictionary_pronounciations(phonetics_path: str, words: dict[str, WordInfo]) -> None:
 	with open(phonetics_path) as dictionary_file:
-		dict_reader = csv.reader(dictionary_file, delimiter=',', quotechar='"', )
+		reader = csv.reader(dictionary_file, delimiter=',', quotechar='"')
 
-		for row in dict_reader:
+		for row in reader:
 			(word, ipa) = row
 
 			normalised_word = normalise_word(word)
@@ -79,20 +85,17 @@ def populate_dictionary_pronounciations(phonetics_path: str, words: dict[str, Wo
 			words[normalised_word].add_phonetic(ipa)
 
 
-def load_words() -> list[Word]:
+def load_words() -> dict[str, WordInfo]:
 	with open("word_list.txt", 'r') as file:
 		words = (w.strip() for w in file)
 		words = [w for w in words if w]
 
-	return { normalise_word(word): Word(word) for word in words }
+	return { normalise_word(word): WordInfo(word) for word in words }
 
 
-def write_words(words: list[Word]) -> None:
-	with open("words.json", 'w') as output_file:
-		# writeable_words = [v.__dict__ for v in word_data.values()]
-		writeable_words = word_data
-
-		json.dump(writeable_words, output_file, indent=4, cls=WordJsonEncoder)
+def write_words(words: list[WordInfo]) -> None:
+	with open("device_files/words.json", 'w') as output_file:
+		json.dump(words, output_file, indent=4, cls=WordInfoJsonEncoder)
 
 
 def normalise_word(word: str) -> str:
@@ -102,18 +105,23 @@ def normalise_word(word: str) -> str:
 def pad_list(l: list, length: int) -> list:
 	return l + ([None] * (length - len(l)))
 
+# Dictionary mapping normalised words to their information
+wordinfos = load_words()
 
-word_data = load_words()
+# Populate defintions, part of speech, and examples from the dictionary files
+populate_dictionary_definitions(dictionary_path, wordinfos)
+populate_dictionary_definitions(dictionary2_path, wordinfos)
+populate_dictionary_definitions(custom_dictionary_path, wordinfos)
 
-populate_dictionary_definitions(dictionary_path, word_data)
-populate_dictionary_definitions(dictionary2_path, word_data)
-populate_dictionary_definitions(custom_dictionary_path, word_data)
+# Populate pronounciations from the phonetics files
+populate_dictionary_pronounciations(custom_phonetics_path, wordinfos)
+populate_dictionary_pronounciations(phonetics_path, wordinfos)
 
-populate_dictionary_pronounciations(custom_phonetics_path, word_data)
-populate_dictionary_pronounciations(phonetics_path, word_data)
+# Write the words in the new format to a json file
+# This will be loaded on the device
+write_words(wordinfos)
 
-write_words(word_data)
-
-for word in word_data.values():
+# Display warnings
+for word in wordinfos.values():
 	if len(word.definitions) == 0:
 		print("WARN: \"%s\" has no definitions" % word.word)

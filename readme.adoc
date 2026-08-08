@@ -2,8 +2,18 @@
 
 Device: M5PaperS3
 
-Download M5 burner
-Install mpremote
+Python libraries:
+* spacy
+
+== Installation
+
+. Download M5 burner
+
+. Install mpremote
+
+. Update `word_list.txt` to include any words which should be shown on the display
+
+. Run `build_json.py` to build the `words.json` file, this will be used to render on the device.
 
 
 = Credits
