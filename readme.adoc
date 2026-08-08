@@ -8,6 +8,6 @@ Install mpremote
 
 = Credits
 
-Pronounciation dictionary: https://github.com/open-dict-data/ipa-dict/blob/master/data/en_UK.txt
-
-Definitions dictionary: https://github.com/CloudBytes-Academy/English-Dictionary-Open-Source
+* phonetics.csv: https://github.com/kaysting/english-dictionary/releases
+* meanings.csv: https://github.com/kaysting/english-dictionary/releases
+* dictionary.csv: https://raw.githubusercontent.com/CloudBytes-Academy/English-Dictionary-Open-Source/refs/heads/main/csv/dictionary.csv
