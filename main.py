@@ -167,6 +167,10 @@ class EventLabel:
  	text = None
 	font = None
 
+	_text_alignment = 'left'
+	_x_offset = 0
+	_y_offset = 0
+
 	def __init__(self, text, x, y, scale, fg_color, bg_color, font):
 		self.x = x
 		self.y = y
@@ -182,21 +186,55 @@ class EventLabel:
 			font
 		)
 
+		self.align_left()
+
+
 	def set_text(self, text):
 		self.text = text
 		self.label.setText(str(text))
+		self._align()
+
 
 	def set_font(self, font):
-		self.font = texfontt
+		self.font = font
 		self.label.setFont(font)
+		self._align()
 
-	def align_center():
-		# Calculate text width
-		# then offset half from x
 
-		# Calculate text height
-		# then offset half from y
-		pass
+	def align_left(self):
+		self._text_alignment = 'left'
+		self._x_offset = 0
+		self._y_offset = 0
+
+		self._reposition_label()
+
+
+	def align_centre(self):
+		self._text_alignment = 'centre'
+
+		text_width = M5.Display.textWidth(self.text, self.font)
+		self._x_offset = -(text_width // 2)
+
+		font_height = M5.Display.fontHeight(self.font)
+		self._y_offset = -(font_height // 2)
+
+		self._reposition_label()
+
+
+	def _align(self):
+		if self._text_alignment == 'left':
+			self.align_left()
+		elif self._text_alignment == 'centre':
+			self.align_centre()
+		else:
+			raise Error("Unknown alignment")
+
+
+	def _reposition_label(self):
+		new_x = self.x + self._x_offset
+		new_y = self.y + self._y_offset
+
+		self.label.setCursor(x = new_x, y = new_y)
 
 
 # ================================
@@ -262,6 +300,7 @@ def setup():
 		0xffffff,
 		M5.Widgets.FONTS.Montserrat48
 	)
+	label_word.align_centre()
 
 	rect_next = EventRectangle(
   		SCREEN_HEIGHT - 80,
