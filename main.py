@@ -10,39 +10,104 @@ title_bar = None
 label_word = None
 rect_next = None
 
+words_dictionary = {}
+
 SCREEN_WIDTH = 540
 SCREEN_HEIGHT = 960
+
+# ================================
+# ================================
+# UI Helper Classes
+# ================================
+# ================================
+
+class EventArgs:
+	sender = None
+
+	def __init__(self, sender):
+		self.sender = sender
+
+class TouchEventArgs(EventArgs):
+	point_x = None
+	point_y = None
+
+	def __init__(self, sender, point_x, point_y):
+		super().__init__(sender)
+
+		self.point_x = point_x
+		self.point_y = point_y
+
+
+"""Abstraction class for registering and triggering
+
+Returns:
+	_type_: _description_
+"""
+class EventController:
+	event_handlers = None
+
+	trigger_conditional = None
+
+	def __init__(self, trigger_conditional):
+		self.event_handlers = []
+		self.trigger_conditional = trigger_conditional
+
+	def subscribe(self, event_handler):
+		self.event_handlers.append(event_handler)
+
+	def trigger(self, event_args):
+		response = EventResponse()
+
+		if not self.trigger_conditional(event_args):
+			return response
+
+		response.event_triggered = True
+
+		for handler in self.event_handlers:
+			if handler(event_args):
+				response.prevent_propagation = True
+				break
+
+		return response
+
 
 class UserInterface:
 	all_elements = None
 
-	background: EventRectangle = None
+	background_onclick = None
 
 	def __init__(self):
 		self.all_elements = []
 
-		self.background = EventRectangle(
-			0,
-			0,
-			0,
-			0,
-			0xffffff,
-		)
+		self.background_onclick = EventController(lambda x: True)
 
 	def add_element(self, element):
 		self.all_elements.append(element)
 
-	def triger_onlick_event(self, touch_x, touch_y):
+	def triger_onclick_event(self, point_x, point_y):
 		was_triggered = False
 
+		event_args = TouchEventArgs(None, point_x, point_y)
+
 		for element in self.all_elements:
-			response = element.trigger_onclick_event(touch_x, touch_y)
+			# Skip UI elements without an onclick event handler
+			if not hasattr(element, 'onclick'): continue
+
+			# Trigger the event
+			event_args.sender = element
+			response = element.onclick.trigger(event_args)
+
+			# Mark this event as actioned so the background doesn't also trigger
 			was_triggered = was_triggered or response.event_triggered
+
+			# End here if required
 			if response.prevent_propagation:
 				return
 
+		# Trigger the background event if no other events were triggered
 		if not was_triggered:
-			self.background.trigger_onclick_event(touch_x, touch_y, force=True)
+			event_args.sender = self
+			self.background_onclick.trigger(event_args)
 
 
 class EventResponse:
@@ -62,7 +127,7 @@ class EventRectangle:
 	width = 0
 	height = 0
 
-	onclick_handlers = None
+	onclick = None
 
 	def __init__(self, x, y, width, height, bg_color):
 		self.min_x = x
@@ -77,7 +142,7 @@ class EventRectangle:
 			bg_color,
 		)
 
-		self.onclick_handlers = []
+		self.onclick = EventController(self._should_trigger_click_event)
 
 	def contains_point(self, x, y):
 		x -= self.min_x
@@ -89,27 +154,96 @@ class EventRectangle:
 		if y > self.height: return False
 		return True
 
-	def add_onclick_event(self, event_handler):
-		self.onclick_handlers.append(event_handler)
+	def _should_trigger_click_event(self, event_args):
+		return self.contains_point(event_args.point_x, event_args.point_y)
 
-	def trigger_onclick_event(self, point_x, point_y, force=False):
-		response = EventResponse()
 
-		if not force:
-			if not self.contains_point(point_x, point_y):
-				return response
+class EventLabel:
+	label = None
 
-		response.event_triggered = True
+	x = 0
+	y = 0
 
-		for handler in self.onclick_handlers:
-			if handler(point_x, point_y, self):
-				response.prevent_propagation = True
-				break
+ 	text = None
+	font = None
 
-		return response
+	def __init__(self, text, x, y, scale, fg_color, bg_color, font):
+		self.x = x
+		self.y = y
+		self.text = text
+		self.font = font
+
+  		self.label = M5.Widgets.Label(
+			text,
+			x, y,
+			scale,
+			fg_color,
+			bg_color,
+			font
+		)
+
+	def set_text(self, text):
+		self.text = text
+		self.label.setText(str(text))
+
+	def set_font(self, font):
+		self.font = texfontt
+		self.label.setFont(font)
+
+	def align_center():
+		# Calculate text width
+		# then offset half from x
+
+		# Calculate text height
+		# then offset half from y
+		pass
+
+
+# ================================
+# ================================
+# Event Handlers
+# ================================
+# ================================
+
+
+def on_rectangle_click(touch_event_args) -> bool:
+	global label_word
+
+ 	label_word.set_text("Inside")
+
+	# Prevent other onclick event handlers from running
+	return True
+
+
+def on_background_click(touch_event_args) -> bool:
+	global label_word
+
+ 	label_word.set_text("Outside")
+
+	# Prevent other onclick event handlers from running
+	return True
+
+
+# ================================
+# ================================
+# Helper methods
+# ================================
+# ================================
+
+def get_label_centre_offset(label_text, label_font, screen_width):
+	text_width = M5.Display.textWidth(label_text, label_font)
+
+	return text_width / 2
+
+# ================================
+# ================================
+# Setup/Loop methods
+# ================================
+# ================================
 
 
 def setup():
+	global words_dictionary
 	global ui, title_bar, label_word, rect_next
 
 	M5.begin()
@@ -119,7 +253,15 @@ def setup():
 
 	title_bar = M5.Widgets.Title("Title", 3, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
 
-	label_word = M5.Widgets.Label("Word Here", 100, 460, 1.0, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
+	label_word = EventLabel(
+		"Word Here",
+		int(SCREEN_HEIGHT / 2),
+		int(SCREEN_WIDTH / 2),
+		1.0,
+		0x000000,
+		0xffffff,
+		M5.Widgets.FONTS.Montserrat48
+	)
 
 	rect_next = EventRectangle(
   		SCREEN_HEIGHT - 80,
@@ -129,30 +271,16 @@ def setup():
 		0x000000,
 	)
 
+	rect_next.onclick.subscribe(on_rectangle_click)
+
 	ui = UserInterface()
 
  	ui.add_element(rect_next)
+ 	ui.add_element(label_word)
 
-	rect_next.add_onclick_event(on_rectangle_click)
+	ui.background_onclick.subscribe(on_background_click)
 
-	ui.background.add_onclick_event(on_background_click)
-
-def on_rectangle_click(point_x, point_y, rectangle) -> bool:
-	global label_word
-
- 	label_word.setText("Inside")
-
-	# Prevent other onclick event handlers from running
-	return True
-
-
-def on_background_click(point_x, point_y, rectangle) -> bool:
-	global label_word
-
- 	label_word.setText("Outside")
-
-	# Prevent other onclick event handlers from running
-	return True
+	words_dictionary = load_words()
 
 
 def loop():
@@ -164,7 +292,7 @@ def loop():
 		touch_y = M5.Touch.getY()
 		title_bar.setText(str(touch_x) + ", " + str(touch_y))
 
-		ui.triger_onlick_event(touch_x, touch_y)
+		ui.triger_onclick_event(touch_x, touch_y)
 
 
 
