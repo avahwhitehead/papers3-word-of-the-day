@@ -36,17 +36,16 @@ class TouchEventArgs(EventArgs):
 		self.point_y = point_y
 
 
-"""Abstraction class for registering and triggering
-
-Returns:
-	_type_: _description_
+"""
+Abstraction class handling registering and triggering event handlers.
+Each controller may have a conditional trigger, triggering event handlers only if this returns True.
 """
 class EventController:
 	event_handlers = None
 
 	trigger_conditional = None
 
-	def __init__(self, trigger_conditional):
+	def __init__(self, trigger_conditional = None):
 		self.event_handlers = []
 		self.trigger_conditional = trigger_conditional
 
@@ -56,8 +55,9 @@ class EventController:
 	def trigger(self, event_args):
 		response = EventResponse()
 
-		if not self.trigger_conditional(event_args):
-			return response
+		if self.trigger_conditional is not None:
+      		if not self.trigger_conditional(event_args):
+            	return response
 
 		response.event_triggered = True
 
@@ -69,6 +69,9 @@ class EventController:
 		return response
 
 
+"""
+Abstraction class representing the user interface, primarily for the purpose of centralised event handling.
+"""
 class UserInterface:
 	all_elements = None
 
@@ -116,7 +119,10 @@ class EventResponse:
 		self.event_triggered = False
 		self.prevent_propagation = False
 
-
+"""
+Wrapper around a Rectangle UI element.
+Provides extra functionality such as event-driven touch handlers.
+"""
 class EventRectangle:
 	rectangle = None
 
@@ -156,6 +162,10 @@ class EventRectangle:
 		return self.contains_point(event_args.point_x, event_args.point_y)
 
 
+"""
+Wrapper around a Label UI element.
+Provides extra functionality such as aligning text within the label.
+"""
 class EventLabel:
 	label = None
 
@@ -295,7 +305,7 @@ def load_words():
 # ================================
 
 
-def on_rectangle_click(touch_event_args) -> bool:
+def on_next_word_click(touch_event_args) -> bool:
 	global label_word
 	global words_dictionary
 
@@ -334,13 +344,30 @@ def setup():
 	global words_dictionary
 	global ui, title_bar, label_word, rect_next
 
+	# Basic setup
 	M5.begin()
 	M5.Widgets.fillScreen(0xeeeeee)
-
 	M5.Display.setRotation(1)
 
+	# Initialise the UI component
+	ui = UserInterface()
+	ui.background_onclick.subscribe(on_background_click)
+
+	# Display the title bar
 	title_bar = M5.Widgets.Title("Title", 3, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
 
+	# Rectangle acting as the "next word" button at the edge of the screen
+	rect_next = EventRectangle(
+  		SCREEN_HEIGHT - 80,
+  		0,
+  		80,
+  		SCREEN_WIDTH,
+		0x000000,
+	)
+ 	ui.add_element(rect_next)
+	rect_next.onclick.subscribe(on_next_word_click)
+
+	# Label to display the current word
 	label_word = EventLabel(
 		"Word Here",
 		int(SCREEN_HEIGHT / 2),
@@ -350,25 +377,10 @@ def setup():
 		0xffffff,
 		M5.Widgets.FONTS.Montserrat48
 	)
+ 	ui.add_element(label_word)
 	label_word.align_centre()
 
-	rect_next = EventRectangle(
-  		SCREEN_HEIGHT - 80,
-  		0,
-  		80,
-  		SCREEN_WIDTH,
-		0x000000,
-	)
-
-	rect_next.onclick.subscribe(on_rectangle_click)
-
-	ui = UserInterface()
-
- 	ui.add_element(rect_next)
- 	ui.add_element(label_word)
-
-	ui.background_onclick.subscribe(on_background_click)
-
+	# Load the word dictionary into memory
 	words_dictionary = load_words()
 
 
