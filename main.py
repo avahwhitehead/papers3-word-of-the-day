@@ -1,9 +1,7 @@
-import io
-import os
-import sys
-
-import M5
 import json
+import M5
+import random
+import time
 
 ui = None
 title_bar = None
@@ -191,8 +189,8 @@ class EventLabel:
 
 	def set_text(self, text):
 		self.text = text
-		self.label.setText(str(text))
 		self._align()
+		self.label.setText(str(text))
 
 
 	def set_font(self, font):
@@ -239,6 +237,59 @@ class EventLabel:
 
 # ================================
 # ================================
+# Dictionary Helper Classes
+# ================================
+# ================================
+
+class WordInfo:
+	word: str = None
+
+	phonetics: list[str] = None
+
+	definitions: list[str] = None
+
+	part_of_speech: str = None
+
+	examples: list[str] = None
+
+	def __init__(self, word: str, phonetics = [], definitions = [], examples = [], part_of_speech = None):
+		self.word = word
+		self.phonetics = phonetics or []
+		self.definitions = definitions or []
+		self.examples = examples or []
+		self.part_of_speech = part_of_speech
+
+	def add_definition(self, definition: str):
+		self.definitions.append(definition)
+
+	def add_phonetic(self, phonetic: str):
+		self.phonetics.append(phonetic)
+
+	def add_example(self, example: str):
+		self.examples.append(example)
+
+	def __str__(self):
+		return "WordInfo<%s>" % self.word
+
+def load_words():
+	words = {}
+	with open('/flash/words.json', 'r') as f:
+		word_dics = json.load(f)
+
+		for word, o in word_dics.items():
+			words[word] = WordInfo(
+				o["word"],
+				o["phonetics"],
+				o["definitions"],
+				o["examples"],
+				o["part_of_speech"]
+			)
+
+	return words
+
+
+# ================================
+# ================================
 # Event Handlers
 # ================================
 # ================================
@@ -246,18 +297,17 @@ class EventLabel:
 
 def on_rectangle_click(touch_event_args) -> bool:
 	global label_word
+	global words_dictionary
 
- 	label_word.set_text("Inside")
+	random_word = random.choice(list(words_dictionary.values()))
+
+ 	label_word.set_text(random_word.word)
 
 	# Prevent other onclick event handlers from running
 	return True
 
 
 def on_background_click(touch_event_args) -> bool:
-	global label_word
-
- 	label_word.set_text("Outside")
-
 	# Prevent other onclick event handlers from running
 	return True
 
@@ -327,11 +377,14 @@ def loop():
 
 	M5.update()
 	if M5.Touch.getCount():
-		touch_x = M5.Touch.getX()
-		touch_y = M5.Touch.getY()
-		title_bar.setText(str(touch_x) + ", " + str(touch_y))
+		(deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
 
-		ui.triger_onclick_event(touch_x, touch_y)
+		if wasReleased:
+			touch_x = M5.Touch.getX()
+			touch_y = M5.Touch.getY()
+			title_bar.setText(str(touch_x) + ", " + str(touch_y))
+
+			ui.triger_onclick_event(touch_x, touch_y)
 
 
 
