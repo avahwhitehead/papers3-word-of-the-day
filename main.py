@@ -35,6 +35,13 @@ class TouchEventArgs(EventArgs):
 		self.point_x = point_x
 		self.point_y = point_y
 
+class EventResponse:
+	event_triggered = False
+	prevent_propagation = False
+
+	def __init__(self):
+		self.event_triggered = False
+		self.prevent_propagation = False
 
 """
 Abstraction class handling registering and triggering event handlers.
@@ -56,8 +63,8 @@ class EventController:
 		response = EventResponse()
 
 		if self.trigger_conditional is not None:
-      		if not self.trigger_conditional(event_args):
-            	return response
+	  		if not self.trigger_conditional(event_args):
+				return response
 
 		response.event_triggered = True
 
@@ -111,13 +118,6 @@ class UserInterface:
 			self.background_onclick.trigger(event_args)
 
 
-class EventResponse:
-	event_triggered = False
-	prevent_propagation = False
-
-	def __init__(self):
-		self.event_triggered = False
-		self.prevent_propagation = False
 
 """
 Wrapper around a Rectangle UI element.
@@ -147,6 +147,9 @@ class EventRectangle:
 		)
 
 		self.onclick = EventController(self._should_trigger_click_event)
+
+	def set_size(self, width, height):
+		self.rectangle.setSize(w = width, h = height)
 
 	def contains_point(self, x, y):
 		x -= self.min_x
@@ -212,7 +215,6 @@ class EventLabel:
 	def align_left(self):
 		self._text_alignment = 'left'
 		self._x_offset = 0
-		self._y_offset = 0
 
 		self._reposition_label()
 
@@ -223,8 +225,14 @@ class EventLabel:
 		text_width = M5.Display.textWidth(self.text, self.font)
 		self._x_offset = -(text_width // 2)
 
-		font_height = M5.Display.fontHeight(self.font)
-		self._y_offset = -(font_height // 2)
+		self._reposition_label()
+
+
+	def align_right(self):
+		self._text_alignment = 'right'
+
+		text_width = M5.Display.textWidth(self.text, self.font)
+		self._x_offset = -text_width
 
 		self._reposition_label()
 
@@ -234,8 +242,10 @@ class EventLabel:
 			self.align_left()
 		elif self._text_alignment == 'centre':
 			self.align_centre()
+		elif self._text_alignment == 'right':
+			self.align_right()
 		else:
-			raise Error("Unknown alignment")
+			raise Error("Unknown horizontal alignment")
 
 
 	def _reposition_label(self):
@@ -244,6 +254,84 @@ class EventLabel:
 
 		self.label.setCursor(x = new_x, y = new_y)
 
+
+class EventTitleBar:
+	event_label_coords = None
+
+	background_rectangle = None
+
+	event_label_battery = None
+
+	x = 0
+	y = 0
+	width = SCREEN_HEIGHT
+	height = 0
+
+	font = None
+
+	bg_color = None
+	fg_color = None
+
+	def __init__(self, ui, fg_color, bg_color, font):
+		# Initialise properties
+		self.font = font
+		self.bg_color = bg_color
+		self.fg_color = fg_color
+		self.height = M5.Display.fontHeight(font)
+
+		# Create background rectangle
+		self.background_rectangle = EventRectangle(
+			self.x,
+			self.y,
+			self.width,
+			self.height,
+			0x000000,
+		)
+	 	ui.add_element(self.background_rectangle)
+
+		# Create coords label on the left
+		self.event_label_coords = EventLabel(
+			"0,0",
+			self.x,
+			0,
+			1.0,
+			fg_color,
+			bg_color,
+			font
+		)
+		ui.add_element(self.event_label_coords)
+		self.event_label_coords.align_left()
+
+		# Create battery label on the right
+		self.event_label_battery = EventLabel(
+			"NA%",
+			self.x + self.width,
+			0,
+			1.0,
+			fg_color,
+			bg_color,
+			font
+		)
+		ui.add_element(self.event_label_battery)
+		self.event_label_battery.align_right()
+
+
+	def set_font(self, font):
+		self.font = font
+		self.height = M5.Display.fontHeight(font)
+
+		self.event_label_battery.set_font(font)
+		self.event_label_coords.set_font(font)
+
+		self.background_rectangle.set_size(self.width, self.height)
+
+
+	def set_battery_percentage(self, battery_level):
+		self.event_label_battery.set_text("{0}%".format(battery_level))
+
+
+	def set_coords(self, point_x, point_y):
+		self.event_label_coords.set_text("({}, {})".format(point_x, point_y))
 
 # ================================
 # ================================
@@ -306,12 +394,13 @@ def load_words():
 
 
 def on_next_word_click(touch_event_args) -> bool:
-	global label_word
+	global label_word, label_definition
 	global words_dictionary
 
 	random_word = random.choice(list(words_dictionary.values()))
 
  	label_word.set_text(random_word.word)
+ 	label_definition.set_text(random_word.definitions[0])
 
 	# Prevent other onclick event handlers from running
 	return True
@@ -342,7 +431,7 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 
 def setup():
 	global words_dictionary
-	global ui, title_bar, label_word, rect_next
+	global ui, title_bar, label_word, rect_next, label_definition
 
 	# Basic setup
 	M5.begin()
@@ -352,9 +441,6 @@ def setup():
 	# Initialise the UI component
 	ui = UserInterface()
 	ui.background_onclick.subscribe(on_background_click)
-
-	# Display the title bar
-	title_bar = M5.Widgets.Title("Title", 3, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
 
 	# Rectangle acting as the "next word" button at the edge of the screen
 	rect_next = EventRectangle(
@@ -367,11 +453,15 @@ def setup():
  	ui.add_element(rect_next)
 	rect_next.onclick.subscribe(on_next_word_click)
 
+	# Display the title bar
+	title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
+ 	ui.add_element(title_bar)
+
 	# Label to display the current word
 	label_word = EventLabel(
 		"Word Here",
 		int(SCREEN_HEIGHT / 2),
-		int(SCREEN_WIDTH / 2),
+		title_bar.height + 5,
 		1.0,
 		0x000000,
 		0xffffff,
@@ -379,6 +469,19 @@ def setup():
 	)
  	ui.add_element(label_word)
 	label_word.align_centre()
+
+	# Label to display the current word
+	label_definition = EventLabel(
+		"Lorem ipsum dolor sit amet, sunt eu est aliqua irure est officia tempor non cillum ipsum dolore non culpa excepteur dolor laborum do labore irure.",
+		int(SCREEN_HEIGHT / 2),
+		int(SCREEN_WIDTH / 2),
+		1.0,
+		0x000000,
+		0xffffff,
+		M5.Widgets.FONTS.Montserrat18
+	)
+ 	ui.add_element(label_definition)
+	label_definition.align_centre()
 
 	# Load the word dictionary into memory
 	words_dictionary = load_words()
@@ -394,11 +497,11 @@ def loop():
 		if wasReleased:
 			touch_x = M5.Touch.getX()
 			touch_y = M5.Touch.getY()
-			title_bar.setText(str(touch_x) + ", " + str(touch_y))
+			title_bar.set_coords(touch_x, touch_y)
 
 			ui.triger_onclick_event(touch_x, touch_y)
 
-
+	title_bar.set_battery_percentage(M5.Power.getBatteryLevel())
 
 
 if __name__ == '__main__':
