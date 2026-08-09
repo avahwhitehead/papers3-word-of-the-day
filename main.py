@@ -254,6 +254,119 @@ class EventLabel:
 
 		self.label.setCursor(x = new_x, y = new_y)
 
+class WrappingEventLabel:
+	labels = None
+
+	x = 0
+	y = 0
+
+ 	text = None
+	font = None
+	scale = None
+
+	fg_color = None
+	bg_color = None
+
+	max_width_pixels = None
+
+	_text_alignment = 'left'
+
+	def __init__(self, text, x, y, scale, fg_color, bg_color, font, max_width_pixels):
+		self.x = x
+		self.y = y
+		self.text = ''
+		self.font = font
+		self.scale = scale
+		self.max_width_pixels = max_width_pixels
+
+		self.fg_color = fg_color
+		self.bg_color = bg_color
+
+		self.labels = []
+
+		self.set_text(text)
+
+	def set_max_width(self, max_width_pixels):
+		self.max_width_pixels = max_width_pixels
+		self.set_text(self.text)
+
+
+	def split_by_n(self, seq, n):
+		'''A generator to divide a sequence into chunks of n units.'''
+		while seq:
+			yield seq[:n]
+			seq = seq[n:]
+
+
+	def set_text(self, text):
+	 	char_width = M5.Display.textWidth('_', self.font)
+		chars_per_line = self.max_width_pixels // char_width
+
+		split_lines = list(self.split_by_n(text, chars_per_line))
+
+		self._assign_labels(split_lines)
+
+
+	def _assign_labels(self, lines):
+		line_height = M5.Display.fontHeight(self.font)
+
+		for i, j in enumerate(lines):
+			if i >= len(self.labels):
+				self._create_label(i * line_height)
+
+			self.labels[i].set_text(lines[i])
+
+		for i in range(len(lines), len(self.labels)):
+			self.labels[i].set_text('')
+
+
+	def _create_label(self, y_offset):
+  		label = EventLabel(
+			'',
+			self.x,
+			self.y + y_offset,
+			self.scale,
+			self.fg_color,
+			self.bg_color,
+			self.font
+		)
+
+		if self._text_alignment == 'left':
+			label.align_left()
+		elif self._text_alignment == 'centre':
+			label.align_centre()
+		elif self._text_alignment == 'right':
+			label.align_right()
+		else:
+			raise Error("Unknown horizontal alignment")
+
+		self.labels.append(label)
+
+	def align_left(self):
+		self._text_alignment = 'left'
+		for label in self.labels:
+			label.align_left()
+
+	def align_centre(self):
+		self._text_alignment = 'centre'
+		for label in self.labels:
+			label.align_centre()
+
+	def align_right(self):
+		self._text_alignment = 'right'
+		for label in self.labels:
+			label.align_right()
+
+	def _align(self):
+		if self._text_alignment == 'left':
+			self.align_left()
+		elif self._text_alignment == 'centre':
+			self.align_centre()
+		elif self._text_alignment == 'right':
+			self.align_right()
+		else:
+			raise Error("Unknown horizontal alignment")
+
 
 class EventTitleBar:
 	event_label_coords = None
@@ -448,7 +561,7 @@ def setup():
   		0,
   		80,
   		SCREEN_WIDTH,
-		0x000000,
+		0x999999,
 	)
  	ui.add_element(rect_next)
 	rect_next.onclick.subscribe(on_next_word_click)
@@ -471,17 +584,19 @@ def setup():
 	label_word.align_centre()
 
 	# Label to display the current word
-	label_definition = EventLabel(
-		"Lorem ipsum dolor sit amet, sunt eu est aliqua irure est officia tempor non cillum ipsum dolore non culpa excepteur dolor laborum do labore irure.",
-		int(SCREEN_HEIGHT / 2),
+	label_definition = WrappingEventLabel(
+		'',
+		int(SCREEN_HEIGHT / 2) - rect_next.width,
 		int(SCREEN_WIDTH / 2),
 		1.0,
 		0x000000,
 		0xffffff,
-		M5.Widgets.FONTS.Montserrat18
+		M5.Widgets.FONTS.Montserrat18,
+		SCREEN_HEIGHT - rect_next.width,
 	)
  	ui.add_element(label_definition)
 	label_definition.align_centre()
+	label_definition.set_text("Lorem ipsum dolor sit amet, sunt eu est aliqua irure est officia tempor non cillum ipsum dolore non culpa excepteur dolor laborum do labore irure.")
 
 	# Load the word dictionary into memory
 	words_dictionary = load_words()
@@ -490,7 +605,7 @@ def setup():
 def loop():
 	global ui, title_bar, label_word
 
-	M5.update()
+	title_bar.set_battery_percentage(M5.Power.getBatteryLevel())
 	if M5.Touch.getCount():
 		(deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
 
@@ -501,7 +616,7 @@ def loop():
 
 			ui.triger_onclick_event(touch_x, touch_y)
 
-	title_bar.set_battery_percentage(M5.Power.getBatteryLevel())
+	M5.update()
 
 
 if __name__ == '__main__':
