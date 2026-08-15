@@ -328,8 +328,10 @@ class WrappingEventLabel:
     def split_by_n(self, seq, n):
         '''A generator to divide a sequence into chunks of n units.'''
         while seq:
-            yield seq[:n]
-            seq = seq[n:]
+            next_seq = seq[:n]
+            next_seq = next_seq.split('\n')[0]
+            yield next_seq
+            seq = seq[len(next_seq + '\n'):]
 
 
     def set_text(self, text):
@@ -563,7 +565,7 @@ def choose_and_display_next_word() -> bool:
     random_word = random.choice(list(words_dictionary.values()))
 
     label_word.set_text(random_word.word)
-    label_definition.set_text(random_word.definitions[0])
+    label_definition.set_text('\n'.join(random_word.definitions))
 
     # Prevent other onclick event handlers from running
     return True
