@@ -2,12 +2,13 @@ import asyncio
 import json
 import M5
 import random
-import time
 
 ui = None
 title_bar = None
 label_word = None
 rect_next = None
+
+battery_monitor = None
 
 words_dictionary = {}
 
@@ -16,7 +17,39 @@ SCREEN_HEIGHT = 960
 
 # ================================
 # ================================
-# UI Helper Classes
+# Helper Classes
+# ================================
+# ================================
+
+class BatteryMonitor:
+    _reading_history = None
+    _current_index = None
+    _window_size = None
+
+    def __init__(self, window = 15):
+        self._reading_history = []
+        self._current_index = 0
+
+        self._window_size = window
+
+    def determine_battery_level(self):
+        latest_battery_level = M5.Power.getBatteryLevel()
+
+        curr_readings = len(self._reading_history)
+
+        if curr_readings < self._window_size:
+            self._reading_history.append(latest_battery_level)
+            curr_readings += 1
+        else:
+            self._reading_history[self._current_index] = latest_battery_level
+
+            self._current_index = (self._current_index + 1) % self._window_size
+
+        return round(sum(self._reading_history) / curr_readings)
+
+# ================================
+# ================================
+# Custom UI Elements
 # ================================
 # ================================
 
@@ -551,6 +584,9 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 def setup():
     global words_dictionary
     global ui, title_bar, label_word, rect_next, label_definition
+    global battery_monitor
+
+    battery_monitor = BatteryMonitor()
 
     # Basic setup
     M5.begin()
@@ -610,10 +646,9 @@ def setup():
 
 
 async def touch_event_loop(period_ms):
-    while True:
-        global ui, title_bar, label_word
+    global ui, title_bar, label_word
 
-        title_bar.set_battery_percentage(M5.Power.getBatteryLevel())
+    while True:
         if M5.Touch.getCount():
             (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
 
@@ -626,25 +661,27 @@ async def touch_event_loop(period_ms):
 
         M5.update()
 
-        yield from asyncio.sleep_ms(period_ms)
+        await asyncio.sleep_ms(period_ms)
 
 
 async def battery_loop(period_ms):
-    global title_bar
+    global title_bar, battery_monitor
     while True:
-        title_bar.set_battery_percentage(M5.Power.getBatteryLevel())
+        battery_level = battery_monitor.determine_battery_level()
 
-        yield from asyncio.sleep_ms(period_ms)
+        battery_level_str = f"{str(battery_level):>3}"
+
+        title_bar.set_battery_percentage(battery_level_str)
+
+        await asyncio.sleep_ms(period_ms)
 
 
 async def main():
     setup()
 
-    loop = asyncio.get_event_loop()
+    battery_task = asyncio.create_task(battery_loop(period_ms = 100))
 
-    battery_task = loop.create_task(battery_loop(period_ms = 2000))
-
-    touch_events_task = loop.create_task(touch_event_loop(period_ms = 2))
+    touch_events_task = asyncio.create_task(touch_event_loop(period_ms = 2))
 
     await asyncio.gather(
         battery_task, touch_events_task
