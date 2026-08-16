@@ -748,13 +748,13 @@ def setup():
 
     battery_monitor = BatteryMonitor()
 
-    SCREEN_HEIGHT = M5.Display.width()
-    SCREEN_WIDTH = M5.Display.height()
-
     # Basic setup
     M5.begin()
     M5.Widgets.fillScreen(0xeeeeee)
     M5.Display.setRotation(1)
+
+    SCREEN_HEIGHT = M5.Display.width()
+    SCREEN_WIDTH = M5.Display.height()
 
     # Initialise the UI component
     ui = UserInterface()
