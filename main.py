@@ -6,7 +6,7 @@ import random
 ui = None
 title_bar = None
 label_word = None
-rect_next = None
+label_next_button = None
 
 battery_monitor = None
 
@@ -152,24 +152,17 @@ class UserInterface:
             self.background_onclick.trigger(event_args)
 
 
-
-"""
-Wrapper around a Rectangle UI element.
-Provides extra functionality such as event-driven touch handlers.
-"""
-class EventRectangle:
-    rectangle = None
-
-    min_x = 0
-    min_y = 0
+class EventElement:
+    x = 0
+    y = 0
     width = 0
     height = 0
 
     onclick = None
 
     def __init__(self, x, y, width, height, bg_color):
-        self.min_x = x
-        self.min_y = y
+        self.x = x
+        self.y = y
         self.width = width
         self.height = height
 
@@ -182,12 +175,9 @@ class EventRectangle:
 
         self.onclick = EventController(self._should_trigger_click_event)
 
-    def set_size(self, width, height):
-        self.rectangle.setSize(w = width, h = height)
-
     def contains_point(self, x, y):
-        x -= self.min_x
-        y -= self.min_y
+        x -= self.x
+        y -= self.y
 
         if x < 0: return False
         if y < 0: return False
@@ -200,14 +190,35 @@ class EventRectangle:
 
 
 """
+Wrapper around a Rectangle UI element.
+Provides extra functionality such as event-driven touch handlers.
+"""
+class EventRectangle(EventElement):
+    rectangle = None
+
+    def __init__(self, x, y, width, height, bg_color):
+        super().__init__(x, y, width, height, bg_color)
+
+        self.rectangle = M5.Widgets.Rectangle(
+            x, y,
+            width, height,
+            bg_color,
+            bg_color,
+        )
+
+    def set_size(self, width, height):
+        self.rectangle.setSize(w = width, h = height)
+
+        self.width = width
+        self.height = height
+
+
+"""
 Wrapper around a Label UI element.
 Provides extra functionality such as aligning text within the label.
 """
-class EventLabel:
+class EventLabel(EventElement):
     label = None
-
-    x = 0
-    y = 0
 
     text = None
     font = None
@@ -217,10 +228,13 @@ class EventLabel:
     _y_offset = 0
 
     def __init__(self, text, x, y, scale, fg_color, bg_color, font):
-        self.x = x
-        self.y = y
         self.text = text
         self.font = font
+
+        text_width = M5.Display.textWidth(self.text, self.font)
+        line_height = M5.Display.fontHeight(self.font)
+
+        super().__init__(x, y, text_width, line_height, bg_color)
 
         self.label = M5.Widgets.Label(
             text,
@@ -239,11 +253,17 @@ class EventLabel:
         self._align()
         self.label.setText(str(text))
 
+        self.width = M5.Display.textWidth(self.text, self.font)
+        self.height = M5.Display.fontHeight(self.font)
+
 
     def set_font(self, font):
         self.font = font
         self.label.setFont(font)
         self._align()
+
+        self.width = M5.Display.textWidth(self.text, self.font)
+        self.height = M5.Display.fontHeight(self.font)
 
 
     def align_left(self):
@@ -271,6 +291,20 @@ class EventLabel:
         self._reposition_label()
 
 
+    def contains_point(self, x, y):
+        x -= self.x
+        y -= self.y
+
+        x -= self._x_offset
+        y -= self._y_offset
+
+        if x < 0: return False
+        if y < 0: return False
+        if x > self.width: return False
+        if y > self.height: return False
+        return True
+
+
     def _align(self):
         if self._text_alignment == 'left':
             self.align_left()
@@ -287,6 +321,7 @@ class EventLabel:
         new_y = self.y + self._y_offset
 
         self.label.setCursor(x = new_x, y = new_y)
+
 
 class WrappingEventLabel:
     labels = None
@@ -616,7 +651,7 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 
 def setup():
     global words_dictionary
-    global ui, title_bar, label_word, rect_next, label_definition
+    global ui, title_bar, label_word, label_next_button, label_definition
     global battery_monitor
 
     battery_monitor = BatteryMonitor()
@@ -633,16 +668,19 @@ def setup():
     ui = UserInterface()
     ui.background_onclick.subscribe(on_background_click)
 
-    # Rectangle acting as the "next word" button at the edge of the screen
-    rect_next = EventRectangle(
-        SCREEN_HEIGHT - 80,
-        0,
-        80,
-        SCREEN_WIDTH,
+    # Label acting as the "next word" button
+    label_next_button = EventLabel(
+        "Next",
+        SCREEN_HEIGHT,
+        SCREEN_WIDTH - M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
+        1.0,
+        0xffffff,
         0x999999,
+        M5.Widgets.FONTS.Montserrat40
     )
-    ui.add_element(rect_next)
-    rect_next.onclick.subscribe(on_next_word_click)
+    ui.add_element(label_next_button)
+    label_next_button.align_right()
+    label_next_button.onclick.subscribe(on_next_word_click)
 
     # Display the title bar
     title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18, SCREEN_HEIGHT)
@@ -662,16 +700,16 @@ def setup():
     ui.add_element(label_word)
     label_word.align_centre()
 
-    # Label to display the current word
+    # Label to display the definition(s) of the word
     label_definition = WrappingEventLabel(
         '',
-        int(SCREEN_HEIGHT / 2) - rect_next.width,
-        int(SCREEN_WIDTH / 2),
+        int(SCREEN_HEIGHT // 2),
+        title_bar.height + label_word.height + 5,
         1.0,
         0x000000,
         0xffffff,
         M5.Widgets.FONTS.Montserrat24,
-        SCREEN_HEIGHT - rect_next.width,
+        SCREEN_HEIGHT,
     )
     ui.add_element(label_definition)
     label_definition.align_centre()
