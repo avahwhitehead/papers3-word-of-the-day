@@ -355,12 +355,48 @@ class WrappingEventLabel:
 
         self.set_text(text)
 
+
     def set_max_width(self, max_width_pixels):
         self.max_width_pixels = max_width_pixels
         self.set_text(self.text)
 
 
-    def split_to_lines(self, full_text, max_line_length):
+    def _get_first_pixel_width_chars(self, seq):
+        # Build the next line to return
+        res = ''
+        # Add characters until the line would exceed the maximum length
+        while len(seq) > 0:
+            if M5.Display.textWidth(res + seq[0], self.font) > self.max_width_pixels:
+                break
+            res += seq[0]
+            seq = seq[1:]
+        return res
+
+
+    def _get_first_pixel_width_words_of_lines(self, line_words):
+        # Build the next line to return
+        section = ''
+        is_start_of_line = True
+        # Add words until the line would exceed the maximum length
+        while len(line_words) > 0:
+            # Add spaces before words but not at the start of the line
+            next_section = ''
+            if not is_start_of_line:
+                next_section += ' '
+            is_start_of_line = False
+
+            next_section += line_words[0]
+
+            if M5.Display.textWidth(section + next_section, self.font) > self.max_width_pixels:
+                return section
+
+            section += next_section
+            line_words.pop(0)
+
+        return section
+
+
+    def _split_to_lines(self, full_text):
         # Split to 2D list of lines and words
         all_lines = (l.split() for l in full_text.split('\n'))
         all_lines = (l for l in all_lines if len(l) > 0)
@@ -375,34 +411,23 @@ class WrappingEventLabel:
                 if len(all_lines) == 0:
                     # End the generator if there are no more lines
                     return
-            line_words = all_lines[0]
 
             # Build the next line to return
-            section = ''
-            # Add words until the line would exceed the maximum length
-            while len(line_words) > 0 and len(section) + len(line_words[0]) < max_line_length:
-                # Add spaces before words but not at the start of the line
-                if not is_start_of_line:
-                    section += ' '
-                is_start_of_line = False
-
-                section += line_words.pop(0)
+            line_words = all_lines[0]
+            section = self._get_first_pixel_width_words_of_lines(line_words)
 
             # If the next word is longer than the current line length
             # Trim and return
             if len(section) == 0:
-                section = line_words[0][:max_line_length]
-                line_words[0] = line_words[0][max_line_length:]
+                section = self._get_first_pixel_width_chars(line_words[0])
+                line_words[0] = line_words[0][len(section):]
 
             yield section
             is_start_of_line = True
 
 
     def set_text(self, text):
-        char_width = M5.Display.textWidth('_', self.font)
-        chars_per_line = self.max_width_pixels // char_width
-
-        split_lines = list(self.split_to_lines(text, chars_per_line))
+        split_lines = list(self._split_to_lines(text))
 
         self._assign_labels(split_lines)
 
@@ -631,7 +656,14 @@ def choose_and_display_next_word() -> bool:
     random_word = random.choice(list(words_dictionary.values()))
 
     label_word.set_text(random_word.word)
-    label_definition.set_text('\n'.join(random_word.definitions))
+
+    text_display = '\n'.join(random_word.definitions)
+
+    text_display += '\n\n'
+
+    text_display += '\n'.join(random_word.examples)
+
+    label_definition.set_text(text_display)
 
     # Prevent other onclick event handlers from running
     return True
@@ -708,7 +740,7 @@ def setup():
         1.0,
         0x000000,
         0xffffff,
-        M5.Widgets.FONTS.Montserrat24,
+        M5.Widgets.FONTS.Montserrat18,
         SCREEN_HEIGHT,
     )
     ui.add_element(label_definition)
