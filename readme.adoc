@@ -2,21 +2,50 @@
 
 Device: M5PaperS3
 
-Python libraries:
-* spacy
-
 == Installation
 
-. Download M5 burner
+=== Install Required Software and Flash Firmware
 
-. Install mpremote
+. Download and run link:https://docs.m5stack.com/en/uiflow/m5burner/intro[M5 burner]
 
-. Update `word_list.txt` to include any words which should be shown on the display
+. Install Firmware `UIFlow2.0 PaperS3` on the device. Set "Boot Option" to "Run main.py directly".
 
-. Run `build_json.py` to build the `words.json` file, this will be used to render on the device.
+. Install link:https://docs.micropython.org/en/latest/reference/mpremote.html[mpremote] for communicating with the firmware
+
+=== (Optional) Update the Words List
+
+The words which the device will cycle through are held in link:./word_list.txt[word_list.txt]. Update this list to add or remove words.
+
+Whenever this list is updated, you will need to run the `build_json.py` script and copy the newly generated json file over to the device.
+
+== Flash to Device
+
+. Run `build_json.py` to build the `words.json` file containing the required word information.
+
+. Write the `words.json` file to the device:
++
+    mpremote fs cp ./device_files/words.json :/flash/words.json
+
+. Write the script to device:
++
+    mpremote connect /dev/ttyACM0 cp ./main.py :/flash/main.py
+
+NOTE: Your device may have a different path
+
+NOTE: When the device is not connected to the computer, a single press of the power button will power it on. A double press will turn it off. The screen does not clear on power-off, you can tell if it is actually powered off by seeing if it responds to touch events.
+
+== Run as Debug
+
+. Write the latest `words.json` file to the device:
++
+    mpremote fs cp ./device_files/words.json :/flash/words.json
+
+. Run the script as debug:
++
+    mpremote connect /dev/ttyACM0 run ./main.py
 
 
-= Credits
+== Credits
 
 * phonetics.csv: https://github.com/kaysting/english-dictionary/releases
 * meanings.csv: https://github.com/kaysting/english-dictionary/releases
