@@ -693,6 +693,7 @@ def choose_and_display_next_word() -> bool:
         )
 
         # Set the new position early to avoid damaging text displayed over the old position
+        label_usage_title.set_text('')
         label_usage_title.set_position(
             int(SCREEN_HEIGHT // 2),
             new_usages_label_y_position,
@@ -700,15 +701,19 @@ def choose_and_display_next_word() -> bool:
 
         # Display the definitions
         label_definition.set_text(definition_text)
+
+        label_usage_title.set_text('Usages')
     else:
         # Display the definitions
         label_definition.set_text(definition_text)
 
         # Set the new position if not set earlier
+        label_usage_title.set_text('')
         label_usage_title.set_position(
             int(SCREEN_HEIGHT // 2),
             new_usages_label_y_position,
         )
+        label_usage_title.set_text('Usages')
 
         # Display the usages
         label_usages.set_position(
