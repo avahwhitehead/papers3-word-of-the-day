@@ -325,20 +325,49 @@ class WrappingEventLabel:
         self.set_text(self.text)
 
 
-    def split_by_n(self, seq, n):
-        '''A generator to divide a sequence into chunks of n units.'''
-        while seq:
-            next_seq = seq[:n]
-            next_seq = next_seq.split('\n')[0]
-            yield next_seq
-            seq = seq[len(next_seq + '\n'):]
+    def split_to_lines(self, full_text, max_line_length):
+        # Split to 2D list of lines and words
+        all_lines = (l.split() for l in full_text.split('\n'))
+        all_lines = (l for l in all_lines if len(l) > 0)
+        all_lines = list(all_lines)
+
+        is_start_of_line = False
+
+        while len(all_lines) > 0:
+            # Take the first non-empty line
+            if len(all_lines[0]) == 0:
+                all_lines.pop(0)
+                if len(all_lines) == 0:
+                    # End the generator if there are no more lines
+                    return
+            line_words = all_lines[0]
+
+            # Build the next line to return
+            section = ''
+            # Add words until the line would exceed the maximum length
+            while len(line_words) > 0 and len(section) + len(line_words[0]) < max_line_length:
+                # Add spaces before words but not at the start of the line
+                if not is_start_of_line:
+                    section += ' '
+                is_start_of_line = False
+
+                section += line_words.pop(0)
+
+            # If the next word is longer than the current line length
+            # Trim and return
+            if len(section) == 0:
+                section = line_words[0][:max_line_length]
+                line_words[0] = line_words[0][max_line_length:]
+
+            yield section
+            is_start_of_line = True
 
 
     def set_text(self, text):
         char_width = M5.Display.textWidth('_', self.font)
         chars_per_line = self.max_width_pixels // char_width
 
-        split_lines = list(self.split_by_n(text, chars_per_line))
+        split_lines = list(self.split_to_lines(text, chars_per_line))
 
         self._assign_labels(split_lines)
 
