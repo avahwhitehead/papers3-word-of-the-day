@@ -2,6 +2,7 @@ import asyncio
 import json
 import M5
 import random
+import time
 
 ui = None
 title_bar = None
@@ -11,6 +12,8 @@ label_usage_title = None
 label_usages = None
 
 battery_monitor = None
+
+last_interaction_event_time = 0
 
 words_dictionary = {}
 
@@ -520,6 +523,8 @@ class EventTitleBar:
 
     event_label_battery = None
 
+    event_label_time = None
+
     x = 0
     y = 0
     width = None
@@ -530,7 +535,7 @@ class EventTitleBar:
     bg_color = None
     fg_color = None
 
-    def __init__(self, ui, fg_color, bg_color, font, display_width):
+    def __init__(self, ui, fg_color, bg_color, font, display_width, initial_time, initial_coords):
         # Initialise properties
         self.font = font
         self.bg_color = bg_color
@@ -545,13 +550,13 @@ class EventTitleBar:
             self.y,
             self.width,
             self.height,
-            0x000000,
+            bg_color,
         )
         ui.add_element(self.background_rectangle)
 
         # Create coords label on the left
         self.event_label_coords = EventLabel(
-            "0,0",
+            self._format_coords_for_display(*initial_coords),
             self.x,
             0,
             1.0,
@@ -561,6 +566,19 @@ class EventTitleBar:
         )
         ui.add_element(self.event_label_coords)
         self.event_label_coords.align_left()
+
+        # Create time label in the middle
+        self.event_label_time = EventLabel(
+            self._format_time_for_display(initial_time),
+            int((self.x + self.width) // 2),
+            0,
+            1.0,
+            fg_color,
+            bg_color,
+            font
+        )
+        ui.add_element(self.event_label_time)
+        self.event_label_time.align_centre()
 
         # Create battery label on the right
         self.event_label_battery = EventLabel(
@@ -591,7 +609,21 @@ class EventTitleBar:
 
 
     def set_coords(self, point_x, point_y):
-        self.event_label_coords.set_text("({}, {})".format(point_x, point_y))
+        self.event_label_coords.set_text(self._format_coords_for_display(point_x, point_y))
+
+
+    def _format_coords_for_display(self, point_x, point_y):
+        return f"({point_x}, {point_y})"
+
+
+    def set_time(self, local_time):
+        self.event_label_time.set_text(self._format_time_for_display(local_time))
+
+
+    def _format_time_for_display(self, local_time):
+        (year, month, month_day, hour, minute, second, week_day, year_day) = local_time
+
+        return f"{hour:02}:{minute:02}"
 
 # ================================
 # ================================
@@ -748,6 +780,7 @@ def setup():
     global ui, title_bar, label_word, label_next_button, label_definition
     global label_usage_title, label_usages
     global battery_monitor
+    global last_interaction_event_time
 
     global SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -766,9 +799,16 @@ def setup():
     ui.background_onclick.subscribe(on_background_click)
 
     # Display the title bar
-    title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18, SCREEN_HEIGHT)
+    title_bar = EventTitleBar(
+        ui = ui,
+        fg_color = 0xffffff,
+        bg_color = 0x000000,
+        font = M5.Widgets.FONTS.Montserrat18,
+        display_width = SCREEN_HEIGHT,
+        initial_time = time.localtime(),
+        initial_coords = (SCREEN_HEIGHT, SCREEN_WIDTH)
+    )
     ui.add_element(title_bar)
-    title_bar.set_coords(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     # Label to display the current word
     label_word = EventLabel(
@@ -842,6 +882,29 @@ def setup():
     words_dictionary = load_words()
 
     choose_and_display_next_word()
+    last_interaction_event_time = time.time()
+
+
+async def refresh_display_loop(period_ms):
+    global last_interaction_event_time
+
+    while True:
+        await asyncio.sleep_ms(period_ms)
+
+        # Update every 5 minutes (300s)
+        curr_time = time.time()
+        if curr_time - last_interaction_event_time > 300:
+            choose_and_display_next_word()
+            last_interaction_event_time = curr_time
+
+
+async def update_time_indicator_loop(period_ms):
+    global title_bar
+
+    while True:
+        title_bar.set_time(time.localtime())
+
+        await asyncio.sleep_ms(period_ms)
 
 
 async def touch_event_loop(period_ms):
@@ -855,6 +918,8 @@ async def touch_event_loop(period_ms):
                 touch_x = M5.Touch.getX()
                 touch_y = M5.Touch.getY()
                 title_bar.set_coords(touch_x, touch_y)
+
+                last_interaction_event_time = time.time()
 
                 ui.triger_onclick_event(touch_x, touch_y)
 
@@ -882,8 +947,15 @@ async def main():
 
     touch_events_task = asyncio.create_task(touch_event_loop(period_ms = 2))
 
+    time_display_task = asyncio.create_task(update_time_indicator_loop(period_ms = 1000))
+
+    refresh_display_task = asyncio.create_task(refresh_display_loop(period_ms = 3000))
+
     await asyncio.gather(
-        battery_task, touch_events_task
+        battery_task,
+        touch_events_task,
+        time_display_task,
+        refresh_display_task,
     )
 
 if __name__ == '__main__':
