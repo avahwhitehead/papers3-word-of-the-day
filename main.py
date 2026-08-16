@@ -799,7 +799,7 @@ def setup():
 
     # "Usage Example" Label
     label_usage_title = EventLabel(
-        'Usages',
+        '',
         int(SCREEN_HEIGHT // 2),
         int(SCREEN_WIDTH // 2),
         1.0,
