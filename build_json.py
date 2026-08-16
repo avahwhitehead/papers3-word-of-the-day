@@ -63,6 +63,9 @@ def populate_dictionary_definitions(dictionary_path: str, words: dict[str, WordI
 
 			word_info = words[normalised_word]
 
+			# Normalise whitespace
+			definition = ' '.join(definition.split())
+
 			if definition:
 				word_info.add_definition(definition)
 
