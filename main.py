@@ -4,6 +4,8 @@ import M5
 import random
 import time
 
+TZ_OFFSET_MINUTES = 60
+
 ui = None
 title_bar = None
 label_word = None
@@ -605,7 +607,11 @@ class EventTitleBar:
 
 
     def set_battery_percentage(self, battery_level):
-        self.event_label_battery.set_text("{0}%".format(battery_level))
+        self.event_label_battery.set_text(self._format_battery_level_for_display(battery_level))
+
+
+    def _format_battery_level_for_display(self, battery_level):
+        return f"{battery_level}%"
 
 
     def set_coords(self, point_x, point_y):
@@ -616,7 +622,8 @@ class EventTitleBar:
         return f"({point_x}, {point_y})"
 
 
-    def set_time(self, local_time):
+    def update_time(self):
+        local_time = time.localtime(time.time() + (60 * TZ_OFFSET_MINUTES))
         self.event_label_time.set_text(self._format_time_for_display(local_time))
 
 
@@ -885,71 +892,75 @@ def setup():
     last_interaction_event_time = time.time()
 
 
-async def refresh_display_loop(period_ms):
+async def refresh_display_loop():
     global last_interaction_event_time
 
-    while True:
-        await asyncio.sleep_ms(period_ms)
-
-        # Update every 5 minutes (300s)
-        curr_time = time.time()
-        if curr_time - last_interaction_event_time > 300:
-            choose_and_display_next_word()
-            last_interaction_event_time = curr_time
+    # Update every 5 minutes (300s)
+    curr_time = time.time()
+    if curr_time - last_interaction_event_time > 300:
+        choose_and_display_next_word()
+        last_interaction_event_time = curr_time
 
 
-async def update_time_indicator_loop(period_ms):
+async def update_time_indicator_loop():
     global title_bar
 
-    while True:
-        title_bar.set_time(time.localtime())
-
-        await asyncio.sleep_ms(period_ms)
+    title_bar.update_time()
 
 
-async def touch_event_loop(period_ms):
+async def touch_event_loop():
     global ui, title_bar, label_word
 
-    while True:
-        if M5.Touch.getCount():
-            (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
+    if M5.Touch.getCount():
+        (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
 
-            if wasReleased:
-                touch_x = M5.Touch.getX()
-                touch_y = M5.Touch.getY()
-                title_bar.set_coords(touch_x, touch_y)
+        if wasReleased:
+            touch_x = M5.Touch.getX()
+            touch_y = M5.Touch.getY()
+            title_bar.set_coords(touch_x, touch_y)
 
-                last_interaction_event_time = time.time()
+            last_interaction_event_time = time.time()
 
-                ui.triger_onclick_event(touch_x, touch_y)
+            ui.triger_onclick_event(touch_x, touch_y)
 
-        M5.update()
-
-        await asyncio.sleep_ms(period_ms)
+    M5.update()
 
 
-async def battery_loop(period_ms):
+async def battery_loop():
     global title_bar, battery_monitor
+
+    battery_level = battery_monitor.determine_battery_level()
+
+    battery_level_str = f"{str(battery_level):>3}"
+
+    title_bar.set_battery_percentage(battery_level_str)
+
+
+async def run_periodically(period_ms, method, *args, **kwargs):
     while True:
-        battery_level = battery_monitor.determine_battery_level()
-
-        battery_level_str = f"{str(battery_level):>3}"
-
-        title_bar.set_battery_percentage(battery_level_str)
-
         await asyncio.sleep_ms(period_ms)
+
+        await method(*args, **kwargs)
 
 
 async def main():
     setup()
 
-    battery_task = asyncio.create_task(battery_loop(period_ms = 100))
+    battery_task = asyncio.create_task(
+        run_periodically(period_ms = 100, method = battery_loop)
+    )
 
-    touch_events_task = asyncio.create_task(touch_event_loop(period_ms = 2))
+    touch_events_task = asyncio.create_task(
+        run_periodically(period_ms = 2, method = touch_event_loop)
+    )
 
-    time_display_task = asyncio.create_task(update_time_indicator_loop(period_ms = 1000))
+    time_display_task = asyncio.create_task(
+        run_periodically(period_ms = 1000, method = update_time_indicator_loop)
+    )
 
-    refresh_display_task = asyncio.create_task(refresh_display_loop(period_ms = 3000))
+    refresh_display_task = asyncio.create_task(
+        run_periodically(period_ms = 3000, method = refresh_display_loop)
+    )
 
     await asyncio.gather(
         battery_task,

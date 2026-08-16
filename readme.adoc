@@ -18,6 +18,14 @@ The words which the device will cycle through are held in link:./word_list.txt[w
 
 Whenever this list is updated, you will need to run the `build_json.py` script and copy the newly generated json file over to the device.
 
+== (Optional) Update Time Zone
+
+By default, the clock on the device will run on London time.
+Due to a limitation of timezone code in micropython, this value is currently hardcoded and will need to be manually updated for daylight savings.
+
+Update the timezone offset by updating the `TZ_OFFSET_MINUTES` value in the code.
+This may be positive or negative, and represents the number of minutes which will be added to (or subtracted from) the time determined by the internal clock.
+
 == Flash to Device
 
 . Run `build_json.py` to build the `words.json` file containing the required word information.
