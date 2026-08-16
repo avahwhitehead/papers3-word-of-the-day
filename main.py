@@ -227,7 +227,7 @@ class EventLabel(EventElement):
     _x_offset = 0
     _y_offset = 0
 
-    def __init__(self, text, x, y, scale, fg_color, bg_color, font):
+    def __init__(self, text, x, y, scale, fg_color, bg_color, font, align = 'left'):
         self.text = text
         self.font = font
 
@@ -236,8 +236,10 @@ class EventLabel(EventElement):
 
         super().__init__(x, y, text_width, line_height)
 
+        self._text_alignment = align
+
         self.label = M5.Widgets.Label(
-            text,
+            '',
             x, y,
             scale,
             fg_color,
@@ -245,7 +247,7 @@ class EventLabel(EventElement):
             font
         )
 
-        self.align_left()
+        self.set_text(text)
 
 
     def set_text(self, text):
@@ -577,10 +579,10 @@ class EventTitleBar:
             1.0,
             fg_color,
             bg_color,
-            font
+            font,
+            align = 'centre'
         )
         ui.add_element(self.event_label_time)
-        self.event_label_time.align_centre()
 
         # Create battery label on the right
         self.event_label_battery = EventLabel(
