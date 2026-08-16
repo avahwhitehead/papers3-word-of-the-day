@@ -7,6 +7,8 @@ ui = None
 title_bar = None
 label_word = None
 label_next_button = None
+label_usage_title = None
+label_usages = None
 
 battery_monitor = None
 
@@ -284,6 +286,13 @@ class EventLabel(EventElement):
         self._reposition_label()
 
 
+    def set_position(self, x, y):
+        self.x = x
+        self.y = y
+        self._reposition_label()
+        self.set_text(self.text)
+
+
     def contains_point(self, x, y):
         x -= self.x
         y -= self.y
@@ -425,6 +434,13 @@ class WrappingEventLabel:
         self._assign_labels(split_lines)
 
 
+    def set_position(self, x, y):
+        self.x = x
+        self.y = y
+
+        self.set_text(self.text)
+
+
     def _assign_labels(self, lines):
         line_height = M5.Display.fontHeight(self.font)
 
@@ -432,11 +448,22 @@ class WrappingEventLabel:
             if i >= len(self.labels):
                 self._create_label(i * line_height)
 
+            # TODO: Only clear if the old text was longer
+            self.labels[i].set_text('')
+            self.labels[i].set_position(self.x, self.y + (i * line_height))
             self.labels[i].set_text(lines[i])
 
         for i in range(len(lines), len(self.labels)):
+            self.labels[i].set_position(self.x, self.y + (i * line_height))
             self.labels[i].set_text('')
 
+        self.height = line_height * len(self.labels)
+        self.width = self.max_width_pixels
+
+    def calculate_height_for_text(self, text):
+        lines = self._split_to_lines(text)
+        font_height = M5.Display.fontHeight(self.font)
+        return len(list(lines)) * font_height
 
     def _create_label(self, y_offset):
         label = EventLabel(
@@ -641,22 +668,59 @@ def on_background_click(touch_event_args) -> bool:
 # ================================
 # ================================
 
-
 def choose_and_display_next_word() -> bool:
-    global label_word, label_definition
+    global label_word, label_definition, label_usage_title, label_usages
     global words_dictionary
 
     random_word = random.choice(list(words_dictionary.values()))
 
+    # Update the displayed word
     label_word.set_text(random_word.word)
 
-    text_display = '\n'.join(random_word.definitions)
+    # Calculate the height of the definition text
+    definition_text = '\n'.join(random_word.definitions)
+    definition_labels_height = label_definition.calculate_height_for_text(definition_text)
 
-    text_display += '\n\n'
+    # Calculate the new Y position of the "Usages" word label
+    old_usages_label_y_position = label_usage_title.y
+    new_usages_label_y_position = label_definition.y + definition_labels_height
 
-    text_display += '\n'.join(random_word.examples)
+    if new_usages_label_y_position >= old_usages_label_y_position:
+        # Display the usages
+        label_usages.set_position(
+            label_usages.x,
+            new_usages_label_y_position + label_usage_title.height,
+        )
 
-    label_definition.set_text(text_display)
+        # Set the new position early to avoid damaging text displayed over the old position
+        label_usage_title.set_position(
+            int(SCREEN_HEIGHT // 2),
+            new_usages_label_y_position,
+        )
+
+        # Display the definitions
+        label_definition.set_text(definition_text)
+    else:
+        # Display the definitions
+        label_definition.set_text(definition_text)
+
+        # Set the new position if not set earlier
+        label_usage_title.set_position(
+            int(SCREEN_HEIGHT // 2),
+            new_usages_label_y_position,
+        )
+
+        # Display the usages
+        label_usages.set_position(
+            label_usages.x,
+            new_usages_label_y_position + label_usage_title.height,
+        )
+
+    usages_text = '\n'.join(random_word.examples)
+    if len(usages_text) == 0:
+        usages_text = "N/A"
+
+    label_usages.set_text(usages_text)
 
     # Prevent other onclick event handlers from running
     return True
@@ -677,7 +741,10 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 def setup():
     global words_dictionary
     global ui, title_bar, label_word, label_next_button, label_definition
+    global label_usage_title, label_usages
     global battery_monitor
+
+    global SCREEN_HEIGHT, SCREEN_WIDTH
 
     battery_monitor = BatteryMonitor()
 
@@ -692,20 +759,6 @@ def setup():
     # Initialise the UI component
     ui = UserInterface()
     ui.background_onclick.subscribe(on_background_click)
-
-    # Label acting as the "next word" button
-    label_next_button = EventLabel(
-        "Next",
-        SCREEN_HEIGHT,
-        SCREEN_WIDTH - M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
-        1.0,
-        0xffffff,
-        0x999999,
-        M5.Widgets.FONTS.Montserrat40
-    )
-    ui.add_element(label_next_button)
-    label_next_button.align_right()
-    label_next_button.onclick.subscribe(on_next_word_click)
 
     # Display the title bar
     title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18, SCREEN_HEIGHT)
@@ -738,6 +791,47 @@ def setup():
     )
     ui.add_element(label_definition)
     label_definition.align_centre()
+
+    # "Usage Example" Label
+    label_usage_title = EventLabel(
+        'Usages',
+        int(SCREEN_HEIGHT // 2),
+        int(SCREEN_WIDTH // 2),
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat40
+    )
+    ui.add_element(label_usage_title)
+    label_usage_title.align_centre()
+
+    # Label to display the usages(s) of the word
+    label_usages = WrappingEventLabel(
+        '',
+        int(SCREEN_HEIGHT // 2),
+        int(SCREEN_WIDTH // 2) + M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat18,
+        SCREEN_HEIGHT,
+    )
+    ui.add_element(label_usages)
+    label_usages.align_centre()
+
+    # Label acting as the "next word" button
+    label_next_button = EventLabel(
+        "Next",
+        SCREEN_HEIGHT,
+        SCREEN_WIDTH - M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
+        1.0,
+        0xffffff,
+        0x999999,
+        M5.Widgets.FONTS.Montserrat40
+    )
+    ui.add_element(label_next_button)
+    label_next_button.align_right()
+    label_next_button.onclick.subscribe(on_next_word_click)
 
     # Load the word dictionary into memory
     words_dictionary = load_words()
