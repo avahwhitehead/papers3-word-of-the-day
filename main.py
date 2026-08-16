@@ -12,8 +12,8 @@ battery_monitor = None
 
 words_dictionary = {}
 
-SCREEN_WIDTH = 540
-SCREEN_HEIGHT = 960
+SCREEN_WIDTH = None
+SCREEN_HEIGHT = None
 
 # ================================
 # ================================
@@ -442,7 +442,7 @@ class EventTitleBar:
 
     x = 0
     y = 0
-    width = SCREEN_HEIGHT
+    width = None
     height = 0
 
     font = None
@@ -450,12 +450,14 @@ class EventTitleBar:
     bg_color = None
     fg_color = None
 
-    def __init__(self, ui, fg_color, bg_color, font):
+    def __init__(self, ui, fg_color, bg_color, font, display_width):
         # Initialise properties
         self.font = font
         self.bg_color = bg_color
         self.fg_color = fg_color
         self.height = M5.Display.fontHeight(font)
+
+        self.width = display_width
 
         # Create background rectangle
         self.background_rectangle = EventRectangle(
@@ -619,6 +621,9 @@ def setup():
 
     battery_monitor = BatteryMonitor()
 
+    SCREEN_HEIGHT = M5.Display.width()
+    SCREEN_WIDTH = M5.Display.height()
+
     # Basic setup
     M5.begin()
     M5.Widgets.fillScreen(0xeeeeee)
@@ -640,13 +645,14 @@ def setup():
     rect_next.onclick.subscribe(on_next_word_click)
 
     # Display the title bar
-    title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18)
+    title_bar = EventTitleBar(ui, 0xffffff, 0x000000, M5.Widgets.FONTS.Montserrat18, SCREEN_HEIGHT)
     ui.add_element(title_bar)
+    title_bar.set_coords(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     # Label to display the current word
     label_word = EventLabel(
         "",
-        int(SCREEN_HEIGHT / 2),
+        int(SCREEN_HEIGHT // 2),
         title_bar.height + 5,
         1.0,
         0x000000,
