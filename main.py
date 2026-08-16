@@ -47,12 +47,6 @@ class BatteryMonitor:
 
         return round(sum(self._reading_history) / curr_readings)
 
-# ================================
-# ================================
-# Custom UI Elements
-# ================================
-# ================================
-
 class EventArgs:
     sender = None
 
@@ -109,6 +103,12 @@ class EventController:
 
         return response
 
+# ================================
+# ================================
+# Custom UI Elements
+# ================================
+# ================================
+
 
 """
 Abstraction class representing the user interface, primarily for the purpose of centralised event handling.
@@ -160,18 +160,11 @@ class EventElement:
 
     onclick = None
 
-    def __init__(self, x, y, width, height, bg_color):
+    def __init__(self, x, y, width, height):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-
-        self.rectangle = M5.Widgets.Rectangle(
-            x, y,
-            width, height,
-            bg_color,
-            bg_color,
-        )
 
         self.onclick = EventController(self._should_trigger_click_event)
 
@@ -197,7 +190,7 @@ class EventRectangle(EventElement):
     rectangle = None
 
     def __init__(self, x, y, width, height, bg_color):
-        super().__init__(x, y, width, height, bg_color)
+        super().__init__(x, y, width, height)
 
         self.rectangle = M5.Widgets.Rectangle(
             x, y,
@@ -234,7 +227,7 @@ class EventLabel(EventElement):
         text_width = M5.Display.textWidth(self.text, self.font)
         line_height = M5.Display.fontHeight(self.font)
 
-        super().__init__(x, y, text_width, line_height, bg_color)
+        super().__init__(x, y, text_width, line_height)
 
         self.label = M5.Widgets.Label(
             text,
