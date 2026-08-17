@@ -58,3 +58,4 @@ NOTE: When the device is not connected to the computer, a single press of the po
 * phonetics.csv: https://github.com/kaysting/english-dictionary/releases
 * meanings.csv: https://github.com/kaysting/english-dictionary/releases
 * dictionary.csv: https://raw.githubusercontent.com/CloudBytes-Academy/English-Dictionary-Open-Source/refs/heads/main/csv/dictionary.csv
+* Usage examples primarily taken from https://www.worddb.com/sentences and https://dictionary.cambridge.org/dictionary/english
