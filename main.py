@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import M5
 import random
 import time
@@ -52,7 +53,7 @@ class BatteryMonitor:
 
             self._current_index = (self._current_index + 1) % self._window_size
 
-        return round(sum(self._reading_history) / curr_readings)
+        return math.floor(sum(self._reading_history) / curr_readings)
 
 class EventArgs:
     sender = None
@@ -684,6 +685,8 @@ def load_words():
                 o["part_of_speech"]
             )
 
+    print(f"Loaded {len(words)} words")
+
     return words
 
 
@@ -716,7 +719,7 @@ def choose_and_display_next_word() -> bool:
     random_word = random.choice(list(words_dictionary.values()))
 
     # Update the displayed word
-    label_word.set_text(random_word.word)
+    label_word.set_text('')
 
     # Calculate the height of the definition text
     definition_text = '\n'.join(random_word.definitions)
@@ -726,41 +729,28 @@ def choose_and_display_next_word() -> bool:
     old_usages_label_y_position = label_usage_title.y
     new_usages_label_y_position = label_definition.y + definition_labels_height
 
-    if new_usages_label_y_position >= old_usages_label_y_position:
-        # Display the usages
-        label_usages.set_position(
-            label_usages.x,
-            new_usages_label_y_position + label_usage_title.height,
-        )
+    # Clear the screen
+    label_definition.set_text('')
+    label_usage_title.set_text('')
+    label_usages.set_text('')
 
-        # Set the new position early to avoid damaging text displayed over the old position
-        label_usage_title.set_text('')
-        label_usage_title.set_position(
-            int(SCREEN_HEIGHT // 2),
-            new_usages_label_y_position,
-        )
+    # Reposition the usages
+    label_usages.set_position(
+        label_usages.x,
+        new_usages_label_y_position + label_usage_title.height,
+    )
 
-        # Display the definitions
-        label_definition.set_text(definition_text)
+    # Reposition the Usages title
+    label_usage_title.set_position(
+        int(SCREEN_HEIGHT // 2),
+        new_usages_label_y_position,
+    )
 
-        label_usage_title.set_text('Usages')
-    else:
-        # Display the definitions
-        label_definition.set_text(definition_text)
+    # Write everything to the screen
+    label_word.set_text(random_word.word)
 
-        # Set the new position if not set earlier
-        label_usage_title.set_text('')
-        label_usage_title.set_position(
-            int(SCREEN_HEIGHT // 2),
-            new_usages_label_y_position,
-        )
-        label_usage_title.set_text('Usages')
-
-        # Display the usages
-        label_usages.set_position(
-            label_usages.x,
-            new_usages_label_y_position + label_usage_title.height,
-        )
+    label_definition.set_text(definition_text)
+    label_usage_title.set_text('Usages')
 
     usages_text = '\n'.join(random_word.examples)
     if len(usages_text) == 0:
@@ -840,7 +830,7 @@ def setup():
         1.0,
         0x000000,
         0xffffff,
-        M5.Widgets.FONTS.Montserrat18,
+        M5.Widgets.FONTS.Montserrat24,
         SCREEN_HEIGHT,
     )
     ui.add_element(label_definition)
@@ -867,7 +857,7 @@ def setup():
         1.0,
         0x000000,
         0xffffff,
-        M5.Widgets.FONTS.Montserrat18,
+        M5.Widgets.FONTS.Montserrat24,
         SCREEN_HEIGHT,
     )
     ui.add_element(label_usages)
@@ -897,9 +887,9 @@ def setup():
 async def refresh_display_loop():
     global last_interaction_event_time
 
-    # Update every 5 minutes (300s)
+    # Update every 60 minutes (3600s)
     curr_time = time.time()
-    if curr_time - last_interaction_event_time > 300:
+    if curr_time - last_interaction_event_time > 3600:
         choose_and_display_next_word()
         last_interaction_event_time = curr_time
 
@@ -912,6 +902,7 @@ async def update_time_indicator_loop():
 
 async def touch_event_loop():
     global ui, title_bar, label_word
+    global last_interaction_event_time
 
     if M5.Touch.getCount():
         (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
