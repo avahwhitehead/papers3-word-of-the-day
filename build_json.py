@@ -58,6 +58,8 @@ def populate_dictionary_definitions(dictionary_path: str, words: dict[str, WordI
 		for row in reader:
 			(word, part_of_speech, definition, example) = pad_list(row, 4)
 
+			if not word: continue
+
 			normalised_word = normalise_word(word)
 			if not normalised_word in words: continue
 
@@ -66,7 +68,7 @@ def populate_dictionary_definitions(dictionary_path: str, words: dict[str, WordI
 			# Normalise whitespace
 			definition = ' '.join(definition.split())
 
-			if definition:
+			if definition and not word_info.definitions:
 				word_info.add_definition(definition)
 
 			if not word_info.part_of_speech:
@@ -128,3 +130,6 @@ write_words(wordinfos)
 for word in wordinfos.values():
 	if len(word.definitions) == 0:
 		print("WARN: \"%s\" has no definitions" % word.word)
+
+	if len(word.examples) == 0:
+		print("WARN: \"%s\" has no usage examples" % word.word)
