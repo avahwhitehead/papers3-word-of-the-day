@@ -53,7 +53,10 @@ class BatteryMonitor:
 
             self._current_index = (self._current_index + 1) % self._window_size
 
+    def get_last_battery_level(self):
+        curr_readings = len(self._reading_history)
         return math.floor(sum(self._reading_history) / curr_readings)
+
 
 class EventArgs:
     sender = None
@@ -919,10 +922,16 @@ async def touch_event_loop():
     M5.update()
 
 
-async def battery_loop():
+async def battery_measurement_loop():
     global title_bar, battery_monitor
 
     battery_level = battery_monitor.determine_battery_level()
+
+
+async def battery_display_loop():
+    global title_bar, battery_monitor
+
+    battery_level = battery_monitor.get_last_battery_level()
 
     battery_level_str = f"{str(battery_level):>3}"
 
@@ -939,8 +948,12 @@ async def run_periodically(period_ms, method, *args, **kwargs):
 async def main():
     setup()
 
-    battery_task = asyncio.create_task(
-        run_periodically(period_ms = 100, method = battery_loop)
+    battery_measure_task = asyncio.create_task(
+        run_periodically(period_ms = 100, method = battery_measurement_loop)
+    )
+
+    battery_display_task = asyncio.create_task(
+        run_periodically(period_ms = 5000, method = battery_display_loop)
     )
 
     touch_events_task = asyncio.create_task(
@@ -956,7 +969,8 @@ async def main():
     )
 
     await asyncio.gather(
-        battery_task,
+        battery_display_task,
+        battery_measure_task,
         touch_events_task,
         time_display_task,
         refresh_display_task,
