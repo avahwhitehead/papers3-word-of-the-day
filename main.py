@@ -719,6 +719,8 @@ def choose_and_display_next_word() -> bool:
     global label_word, label_definition, label_usage_title, label_usages
     global words_dictionary
 
+    # clear_rect = EventRectangle(0,title_bar.height,SCREEN_HEIGHT,SCREEN_WIDTH, 0xffffff)
+
     random_word = random.choice(list(words_dictionary.values()))
 
     # Update the displayed word
