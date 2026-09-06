@@ -10,6 +10,8 @@ print("Running version:", sys.version)
 
 TZ_OFFSET_MINUTES = 60
 
+WORD_REFRESH_PERIOD_SECONDS = 1800
+
 ui = None
 title_bar = None
 label_word = None
@@ -19,7 +21,7 @@ label_usages = None
 
 battery_monitor = None
 
-last_interaction_event_time = 0
+last_word_refresh_time = 0
 
 word_store = None
 
@@ -768,10 +770,11 @@ def on_background_click(touch_event_args) -> bool:
 # ================================
 
 def choose_and_display_next_word() -> bool:
+    global last_word_refresh_time
     global label_word, label_definition, label_usage_title, label_usages
     global word_store
 
-    # clear_rect = EventRectangle(0,title_bar.height,SCREEN_HEIGHT,SCREEN_WIDTH, 0xffffff)
+    last_word_refresh_time = time.time()
 
     random_word = word_store.next_word()
 
@@ -836,7 +839,6 @@ def setup():
     global ui, title_bar, label_word, label_next_button, label_definition
     global label_usage_title, label_usages
     global battery_monitor
-    global last_interaction_event_time
 
     global SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -938,17 +940,15 @@ def setup():
     word_store = WordStore()
 
     choose_and_display_next_word()
-    last_interaction_event_time = time.time()
 
 
 async def refresh_display_loop():
-    global last_interaction_event_time
+    global WORD_REFRESH_PERIOD_SECONDS
 
     # Update every 60 minutes (3600s)
     curr_time = time.time()
-    if curr_time - last_interaction_event_time > 3600:
+    if curr_time - last_word_refresh_time > WORD_REFRESH_PERIOD_SECONDS:
         choose_and_display_next_word()
-        last_interaction_event_time = curr_time
 
 
 async def update_time_indicator_loop():
@@ -959,7 +959,6 @@ async def update_time_indicator_loop():
 
 async def touch_event_loop():
     global ui, title_bar, label_word
-    global last_interaction_event_time
 
     if M5.Touch.getCount():
         (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
@@ -968,8 +967,6 @@ async def touch_event_loop():
             touch_x = M5.Touch.getX()
             touch_y = M5.Touch.getY()
             title_bar.set_coords(touch_x, touch_y)
-
-            last_interaction_event_time = time.time()
 
             ui.triger_onclick_event(touch_x, touch_y)
 
