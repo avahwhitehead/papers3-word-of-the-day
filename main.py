@@ -945,7 +945,7 @@ def setup():
 async def refresh_display_loop():
     global WORD_REFRESH_PERIOD_SECONDS
 
-    # Update every 60 minutes (3600s)
+    # Update when the refresh period elapses
     curr_time = time.time()
     if curr_time - last_word_refresh_time > WORD_REFRESH_PERIOD_SECONDS:
         choose_and_display_next_word()
