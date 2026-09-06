@@ -6,11 +6,13 @@ Device: M5PaperS3
 
 === Install Required Software and Flash Firmware
 
-. Download and run link:https://docs.m5stack.com/en/uiflow/m5burner/intro[M5 burner]
-
-. Install Firmware `UIFlow2.0 PaperS3` on the device. Set "Boot Option" to "Run main.py directly".
+. Flash the latest UIFlow2 firmware using link:https://uiflow2.m5stack.com/[the website] or the link:https://docs.m5stack.com/en/uiflow/m5burner/intro[M5 burner] application.
++
+Set "Boot Option" to "Run main.py directly".
 
 . Install link:https://docs.micropython.org/en/latest/reference/mpremote.html[mpremote] for communicating with the firmware
+
+Once the firmware is installed, the device can be powered on by pressing the power button once, and powered off by pressing it twice.
 
 === (Optional) Update the Words List
 
@@ -18,35 +20,72 @@ The words which the device will cycle through are held in link:./word_list.txt[w
 
 Whenever this list is updated, you will need to run the `build_json.py` script and copy the newly generated json file over to the device.
 
-== (Optional) Update Time Zone
+== Create environment.json file
 
-By default, the clock on the device will run on London time.
-Due to a limitation of timezone code in micropython, this value is currently hardcoded and will need to be manually updated for daylight savings.
+Create the file `device_files/environment.json` with the following template:
 
-Update the timezone offset by updating the `TZ_OFFSET_MINUTES` value in the code.
-This may be positive or negative, and represents the number of minutes which will be added to (or subtracted from) the time determined by the internal clock.
+[source]
+----
+{
+    "TIME_ZONE": "GMT+1",
+    "WORD_REFRESH_PERIOD_SECONDS": 1800,
+    "WIFI": {
+        "YOUR_SSID": "YOUR_PASSWORD"
+    }
+}
+----
+
+If these are not provided, the following defaults will apply:
+
+[cols="1,1"]
+|===
+|Key |Default Value
+
+|`TIME_ZONE`
+|`GMT+0`
+
+|`WORD_REFRESH_PERIOD_SECONDS`
+|`1800`
+
+|`WIFI`
+|`{}` (no SSIDs)
+|===
+
+NOTE: WiFi is only enabled once at device startup and used for NTP synchronisation. If no predefined networks are available, sync will be skipped.
 
 == Flash to Device
 
 . Run `build_json.py` to build the `words.json` file containing the required word information.
 
-. Write the `words.json` file to the device:
+. Copy the data files over:
 +
-    mpremote fs cp ./device_files/words.json :/flash/words.json
+[,shell]
+----
+mpremote fs cp ./device_files/words.json :/flash/words.json
+mpremote fs cp ./device_files/environment.json :/flash/environment.json
+mpremote fs cp ./device_files/environment.json :/flash/environment.json
+----
 
-. Write the script to device:
+. Copy the script files over:
 +
-    mpremote connect /dev/ttyACM0 cp ./main.py :/flash/main.py
-
-NOTE: Your device may have a different path
+[,shell]
+----
+mpremote fs cp ./boot.py :/flash/boot.py
+mpremote fs cp ./main.py :/flash/main.py
+----
 
 NOTE: When the device is not connected to the computer, a single press of the power button will power it on. A double press will turn it off. The screen does not clear on power-off, you can tell if it is actually powered off by seeing if it responds to touch events.
 
 == Run as Debug
 
-. Write the latest `words.json` file to the device:
+. Write the latest data files to the device:
 +
-    mpremote fs cp ./device_files/words.json :/flash/words.json
+[,shell]
+----
+mpremote fs cp ./device_files/words.json :/flash/words.json
+mpremote fs cp ./device_files/environment.json :/flash/environment.json
+mpremote fs cp ./device_files/environment.json :/flash/environment.json
+----
 
 . Run the script as debug:
 +

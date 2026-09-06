@@ -2,16 +2,17 @@ import asyncio
 import json
 import math
 import M5
+import network
+import ntptime
 import random
 import sys
 import time
 
+from hardware import RTC
+
 print("Running version:", sys.version)
 
-TZ_OFFSET_MINUTES = 60
-
-WORD_REFRESH_PERIOD_SECONDS = 1800
-
+# UI Elements
 ui = None
 title_bar = None
 label_word = None
@@ -19,20 +20,76 @@ label_next_button = None
 label_usage_title = None
 label_usages = None
 
+# Helpers
 battery_monitor = None
-
-last_word_refresh_time = 0
-
+config = None
+wifi = None
 word_store = None
+
+# State
+last_word_refresh_time = 0
 
 SCREEN_WIDTH = None
 SCREEN_HEIGHT = None
+
 
 # ================================
 # ================================
 # Helper Classes
 # ================================
 # ================================
+
+class Config:
+    def __init__(self):
+        self.timezone = 'GMT+0'
+        self.word_refresh_period_seconds = 1800
+        self.wifi_credentials = {}
+
+    def load(self):
+        try:
+            with open('/flash/environment.json') as f:
+                data = json.load(f)
+        except Exception as e:
+            print("Couldn't load config file:", e)
+            data = {}
+
+        self.timezone = self._get_str_value_or_default(data, "TIME_ZONE", "GMT+0")
+        self.word_refresh_period_seconds = self._get_int_value_or_default(data, "WORD_REFRESH_PERIOD_SECONDS", 1800)
+
+        self.wifi_credentials = self._get_and_validate_wifi_dict(data, "WIFI")
+
+
+    def _get_value_or_default(self, data, key, default):
+        if (key not in data) or (data[key] is None):
+            print(f"No value set for '{key}'. Using default '{default}'.")
+            return default
+        return data[key]
+
+    def _get_str_value_or_default(self, data, key, default):
+        val = self._get_value_or_default(data, key, default)
+        if type(val) is not str:
+            raise Exception(f"Invalid config value provided for key {key}. Expected string but got {type(val)}")
+        return val
+
+    def _get_int_value_or_default(self, data, key, default):
+        val = self._get_value_or_default(data, key, default)
+        if type(val) is not int:
+            raise Exception(f"Invalid config value provided for key {key}. Expected int but got {type(val)}")
+        return val
+
+    def _get_and_validate_wifi_dict(self, data, key):
+        val = self._get_value_or_default(data, key, {})
+        if type(val) is not dict:
+            raise Exception(f"Invalid config value provided for key {key}. Should be a dictionary of str:str (SSID: Password)")
+
+        for k,v in val.items():
+            if type(k) is not str:
+                raise Exception(f"Invalid key provided for key 'WIFI.{k}'. Should be a string.")
+            if type(v) is not str:
+                raise Exception(f"Invalid value provided for key 'WIFI.{k}'. Should be a string.")
+
+        return val
+
 
 class BatteryMonitor:
     _reading_history = None
@@ -61,6 +118,83 @@ class BatteryMonitor:
     def get_last_battery_level(self):
         curr_readings = len(self._reading_history)
         return math.floor(sum(self._reading_history) / curr_readings)
+
+
+class WifiHelper:
+    _credentials = None
+    _wlan_sta = None
+
+    def __init__(self):
+        global config
+
+        self._credentials = config.wifi_credentials
+
+        self._wlan_sta = network.WLAN(network.STA_IF)
+
+
+    def try_connect(self):
+        self._wlan_sta.active(True)
+
+        print("Starting WiFi scan...")
+        for sta_record in self._wlan_sta.scan():
+            ssid = sta_record[0].decode()
+            if not ssid:
+                continue
+
+            print(f"Found: {ssid}")
+            if not (ssid in self._credentials):
+                continue
+
+            if self.connect_to_network_and_wait(ssid, self._credentials[ssid]):
+                return True
+
+        print("Could not find any known WiFi network")
+
+
+    def connect_to_network_and_wait(self, ssid, password, timeout_seconds = 10):
+        print(f"Trying to connect to '{ssid}'")
+
+        res = self._wlan_sta.connect(ssid, password)
+
+        connect_start_time = time.time()
+
+        while not self._wlan_sta.isconnected():
+            time.sleep(0.5)
+
+            curr_time = time.time()
+            if curr_time - connect_start_time >= timeout_seconds:
+                print("Timed out trying to connect to WiFi")
+                return False
+
+        print("Connected to WiFi!")
+        return True
+
+
+    def print_info(self):
+        print("==== WiFi Info ====")
+        print(f"Connected: {self._wlan_sta.isconnected()}")
+        (ip, subnet_mask, route, dns) = self._wlan_sta.ifconfig()
+        print(f"IP:      {ip}")
+        print(f"Subnet:  {subnet_mask}")
+        print(f"Route:   {route}")
+        print(f"DNS:     {dns}")
+        print("===================")
+
+
+    def disconnect(self):
+        print("Disconnecting WiFi and deactivating adapter")
+        try:
+            self._wlan_sta.disconnect()
+            self._wlan_sta.active(False)
+        except Exception:
+            pass
+
+
+# ================================
+# ================================
+# Event Classes
+# ================================
+# ================================
 
 class EventArgs:
     sender = None
@@ -633,7 +767,7 @@ class EventTitleBar:
 
 
     def update_time(self):
-        local_time = time.localtime(time.time() + (60 * TZ_OFFSET_MINUTES))
+        local_time = time.localtime()
         self.event_label_time.set_text(self._format_time_for_display(local_time))
 
 
@@ -826,6 +960,10 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 
     return text_width / 2
 
+
+def format_datetime(localtime):
+    return f"{localtime[0]:04d}-{localtime[1]:02d}-{localtime[2]:02d} {localtime[3]:02d}:{localtime[4]:02d}:{localtime[5]:02d}"
+
 # ================================
 # ================================
 # Setup/Loop methods
@@ -834,14 +972,20 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 
 
 def setup():
+    global config
     global word_store
+    global wifi
     global ui, title_bar, label_word, label_next_button, label_definition
     global label_usage_title, label_usages
     global battery_monitor
 
     global SCREEN_HEIGHT, SCREEN_WIDTH
 
+    config = Config()
+    config.load()
+
     battery_monitor = BatteryMonitor()
+    wifi = WifiHelper()
 
     # Basic setup
     M5.begin()
@@ -942,11 +1086,11 @@ def setup():
 
 
 async def refresh_display_loop():
-    global WORD_REFRESH_PERIOD_SECONDS
+    global config
 
     # Update when the refresh period elapses
     curr_time = time.time()
-    if curr_time - last_word_refresh_time > WORD_REFRESH_PERIOD_SECONDS:
+    if curr_time - last_word_refresh_time > config.word_refresh_period_seconds:
         choose_and_display_next_word()
 
 
@@ -988,6 +1132,37 @@ async def battery_display_loop():
     title_bar.set_battery_percentage(battery_level_str)
 
 
+async def try_ntp_sync():
+    global config, wifi
+
+    rtc = RTC()
+
+    # Fake time for debugging
+    # rtc.init((2026, 9, 6, 0, 0, 0, 0, 0))
+
+    print(f"Setting time zone to '{config.timezone}'")
+    time.timezone(config.timezone)
+
+    if not wifi.try_connect():
+        wifi.disconnect()
+        print("Skipping NTP sync as WiFi is not available")
+        return
+
+    wifi.print_info()
+
+    print("Trying NTP sync")
+    print(f"Time before sync: {format_datetime(time.localtime())}")
+
+    try:
+        ntp = ntptime.settime()
+    except Exception as e:
+        print("Error fetching NTP time:", e)
+
+    print(f"Time after sync:  {format_datetime(time.localtime())}")
+
+    wifi.disconnect()
+
+
 async def run_periodically(period_ms, method, *args, **kwargs):
     while True:
         await asyncio.sleep_ms(period_ms)
@@ -997,6 +1172,8 @@ async def run_periodically(period_ms, method, *args, **kwargs):
 
 async def main():
     setup()
+
+    await try_ntp_sync()
 
     battery_measure_task = asyncio.create_task(
         run_periodically(period_ms = 100, method = battery_measurement_loop)
@@ -1026,7 +1203,7 @@ async def main():
         refresh_display_task,
     )
 
-if __name__ == '__main__':
+def start():
     try:
         asyncio.run(main())
     except (Exception, KeyboardInterrupt, asyncio.CancelledError) as e:
@@ -1035,3 +1212,6 @@ if __name__ == '__main__':
             print_error_msg(e)
         except ImportError:
             print("please update to latest firmware")
+
+if __name__ == '__main__':
+    start()
