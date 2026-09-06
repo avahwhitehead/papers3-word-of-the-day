@@ -3,7 +3,10 @@ import json
 import math
 import M5
 import random
+import sys
 import time
+
+print("Running version:", sys.version)
 
 TZ_OFFSET_MINUTES = 60
 
@@ -683,7 +686,7 @@ class WordStore:
     def __init__(self):
         self._words_list = self._load_words()
 
-        self._used_words = []
+        self._used_words = self._load_used_words()
 
 
     def next_word(self):
@@ -691,10 +694,13 @@ class WordStore:
             self._used_words.clear()
 
         available_words = [w for w in self._words_list if w.word not in self._used_words]
+        print(f"{len(available_words)} words to choose from")
 
         chosen_word = random.choice(available_words)
 
         self._used_words.append(chosen_word.word)
+
+        self._save_used_words(self._used_words)
 
         return chosen_word
 
@@ -717,6 +723,26 @@ class WordStore:
         print(f"Loaded {len(words)} words")
 
         return words
+
+
+    def _load_used_words(self):
+        try:
+            with open('/flash/used_words.json', 'r') as f:
+                used_words = json.load(f)
+                print(f"Loaded {len(used_words)} used words")
+                return used_words
+        except Exception as e:
+            print(e)
+            return []
+
+
+    def _save_used_words(self, used_words):
+        try:
+            with open('/flash/used_words.json', 'w') as f:
+                json.dump(used_words, f)
+                print(f"Wrote {len(used_words)} used words")
+        except Exception as e:
+            print(e)
 
 
 # ================================
