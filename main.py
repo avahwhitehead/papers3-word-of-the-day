@@ -18,7 +18,7 @@ battery_monitor = None
 
 last_interaction_event_time = 0
 
-words_dictionary = {}
+word_store = None
 
 SCREEN_WIDTH = None
 SCREEN_HEIGHT = None
@@ -674,23 +674,49 @@ class WordInfo:
     def __str__(self):
         return "WordInfo<%s>" % self.word
 
-def load_words():
-    words = {}
-    with open('/flash/words.json', 'r') as f:
-        word_dics = json.load(f)
 
-        for word, o in word_dics.items():
-            words[word] = WordInfo(
-                o["word"],
-                o["phonetics"],
-                o["definitions"],
-                o["examples"],
-                o["part_of_speech"]
-            )
+class WordStore:
+    _words_list = None
 
-    print(f"Loaded {len(words)} words")
+    _used_words = None
 
-    return words
+    def __init__(self):
+        self._words_list = self._load_words()
+
+        self._used_words = []
+
+
+    def next_word(self):
+        if len(self._used_words) >= len(self._words_list):
+            self._used_words.clear()
+
+        available_words = [w for w in self._words_list if w.word not in self._used_words]
+
+        chosen_word = random.choice(available_words)
+
+        self._used_words.append(chosen_word.word)
+
+        return chosen_word
+
+
+    def _load_words(self):
+        words = []
+        with open('/flash/words.json', 'r') as f:
+            word_dics = json.load(f)
+
+            for word_str, o in word_dics.items():
+                word = WordInfo(
+                    o["word"],
+                    o["phonetics"],
+                    o["definitions"],
+                    o["examples"],
+                    o["part_of_speech"]
+                )
+                words.append(word)
+
+        print(f"Loaded {len(words)} words")
+
+        return words
 
 
 # ================================
@@ -717,11 +743,11 @@ def on_background_click(touch_event_args) -> bool:
 
 def choose_and_display_next_word() -> bool:
     global label_word, label_definition, label_usage_title, label_usages
-    global words_dictionary
+    global word_store
 
     # clear_rect = EventRectangle(0,title_bar.height,SCREEN_HEIGHT,SCREEN_WIDTH, 0xffffff)
 
-    random_word = random.choice(list(words_dictionary.values()))
+    random_word = word_store.next_word()
 
     # Update the displayed word
     label_word.set_text('')
@@ -780,7 +806,7 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 
 
 def setup():
-    global words_dictionary
+    global word_store
     global ui, title_bar, label_word, label_next_button, label_definition
     global label_usage_title, label_usages
     global battery_monitor
@@ -883,7 +909,7 @@ def setup():
     label_next_button.onclick.subscribe(on_next_word_click)
 
     # Load the word dictionary into memory
-    words_dictionary = load_words()
+    word_store = WordStore()
 
     choose_and_display_next_word()
     last_interaction_event_time = time.time()
