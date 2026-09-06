@@ -62,7 +62,6 @@ class BatteryMonitor:
         curr_readings = len(self._reading_history)
         return math.floor(sum(self._reading_history) / curr_readings)
 
-
 class EventArgs:
     sender = None
 
