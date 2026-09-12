@@ -6,9 +6,11 @@ Device: M5PaperS3
 
 === Install Required Software and Flash Firmware
 
-. Flash the latest UIFlow2 firmware using link:https://uiflow2.m5stack.com/[the website] or the link:https://docs.m5stack.com/en/uiflow/m5burner/intro[M5 burner] application.
+. Flash the latest UIFlow2 firmware using link:https://burner.m5stack.com/firmwares?device=2093000000000000018&keyword=papers3&firmware=1897200000000000284[the website] or the link:https://docs.m5stack.com/en/uiflow/m5burner/intro[M5 burner] application.
 +
 Set "Boot Option" to "Run main.py directly".
+
+NOTE: Press and hold the power button until the LED on the back of the device flashes green to enter flashing mode.
 
 . Install link:https://docs.micropython.org/en/latest/reference/mpremote.html[mpremote] for communicating with the firmware
 
