@@ -16,6 +16,7 @@ print("Running version:", sys.version)
 ui = None
 title_bar = None
 label_word = None
+label_definition = None
 label_next_button = None
 label_usage_title = None
 label_usages = None
@@ -275,6 +276,12 @@ class UserInterface:
     def add_element(self, element):
         self.all_elements.append(element)
 
+    def remove_element_or_none(self, element):
+        if element is None:
+            return
+
+        self.all_elements.remove(element)
+
     def triger_onclick_event(self, point_x, point_y):
         was_triggered = False
 
@@ -354,6 +361,9 @@ class EventRectangle(EventElement):
         self.width = width
         self.height = height
 
+    def redraw(self):
+        self.rectangle.setVisible(True)
+
 
 """
 Wrapper around a Label UI element.
@@ -362,92 +372,74 @@ Provides extra functionality such as aligning text within the label.
 class EventLabel(EventElement):
     label = None
 
+    base_x = 0
+    base_y = 0
+
+    x = 0
+    y = 0
+
     text = None
     font = None
 
-    _text_alignment = 'left'
-    _x_offset = 0
-    _y_offset = 0
+    _text_alignment = None
 
-    def __init__(self, text, x, y, scale, fg_color, bg_color, font, align = 'left'):
-        self.text = text
+    def __init__(self, text, x, y, scale, fg_color, bg_color, font, align):
         self.font = font
+        self.text = text
+        self._text_alignment = align
 
         text_width = M5.Display.textWidth(self.text, self.font)
         line_height = M5.Display.fontHeight(self.font)
 
         super().__init__(x, y, text_width, line_height)
-
-        self._text_alignment = align
+        self.base_x = x
+        self.base_y = y
+        self._set_coords(x, y)
 
         self.label = M5.Widgets.Label(
-            '',
-            x, y,
+            text,
+            self.x, self.y,
             scale,
             fg_color,
             bg_color,
-            font
+            font,
         )
 
-        self.set_text(text)
 
-
-    def set_text(self, text):
+    def set_text(self, text, x = None, y = None):
         self.text = text
-        self._align()
+        x = x or self.base_x
+        y = y or self.base_y
+        self._set_coords(x, y)
+
+        self.label.setCursor(x = self.x, y = self.y)
         self.label.setText(str(text))
 
         self.width = M5.Display.textWidth(self.text, self.font)
         self.height = M5.Display.fontHeight(self.font)
 
 
-    def set_font(self, font):
-        self.font = font
-        self.label.setFont(font)
-        self._align()
+    def set_position(self, x, y):
+        self._set_coords(x, y)
+
+        self.label.setCursor(x = self.x, y = self.y)
+        self.label.setText(str(self.text))
 
         self.width = M5.Display.textWidth(self.text, self.font)
         self.height = M5.Display.fontHeight(self.font)
 
 
-    def align_left(self):
-        self._text_alignment = 'left'
-        self._x_offset = 0
-
-        self._reposition_label()
+    def set_visible(self, visible = True):
+        self.label.setVisible(visible)
 
 
-    def align_centre(self):
-        self._text_alignment = 'centre'
-
-        text_width = M5.Display.textWidth(self.text, self.font)
-        self._x_offset = -(text_width // 2)
-
-        self._reposition_label()
-
-
-    def align_right(self):
-        self._text_alignment = 'right'
-
-        text_width = M5.Display.textWidth(self.text, self.font)
-        self._x_offset = -text_width
-
-        self._reposition_label()
-
-
-    def set_position(self, x, y):
-        self.x = x
-        self.y = y
-        self._reposition_label()
-        self.set_text(self.text)
+    def redraw(self):
+        self.set_visible(True)
 
 
     def contains_point(self, x, y):
         x -= self.x
         y -= self.y
-
-        x -= self._x_offset
-        y -= self._y_offset
 
         if x < 0: return False
         if y < 0: return False
@@ -456,22 +448,21 @@ class EventLabel(EventElement):
         return True
 
 
-    def _align(self):
+    def _set_coords(self, x, y):
+        text_width = M5.Display.textWidth(self.text, self.font)
+
         if self._text_alignment == 'left':
-            self.align_left()
+            self.x = x
+            self.y = y
         elif self._text_alignment == 'centre':
-            self.align_centre()
+            self.x = x - (text_width // 2)
+            self.y = y
         elif self._text_alignment == 'right':
-            self.align_right()
+            self.x = x - text_width
+            self.y = y
         else:
-            raise Error("Unknown horizontal alignment")
+            raise Exception(f"Unknown horizontal alignment: '{self._text_alignment}'")
 
-
-    def _reposition_label(self):
-        new_x = self.x + self._x_offset
-        new_y = self.y + self._y_offset
-
-        self.label.setCursor(x = new_x, y = new_y)
 
 
 class WrappingEventLabel:
@@ -491,13 +482,14 @@ class WrappingEventLabel:
 
     _text_alignment = 'left'
 
-    def __init__(self, text, x, y, scale, fg_color, bg_color, font, max_width_pixels):
+    def __init__(self, text, x, y, scale, fg_color, bg_color, font, max_width_pixels, align):
         self.x = x
         self.y = y
         self.text = ''
         self.font = font
         self.scale = scale
         self.max_width_pixels = max_width_pixels
+        self._text_alignment = align
 
         self.fg_color = fg_color
         self.bg_color = bg_color
@@ -512,163 +504,62 @@ class WrappingEventLabel:
         self.set_text(self.text)
 
 
-    def _get_first_pixel_width_chars(self, seq):
-        # Build the next line to return
-        res = ''
-        # Add characters until the line would exceed the maximum length
-        while len(seq) > 0:
-            if M5.Display.textWidth(res + seq[0], self.font) > self.max_width_pixels:
-                break
-            res += seq[0]
-            seq = seq[1:]
-        return res
+    def set_position(self, x, y):
+        self.set_text(self.text, x, y)
 
 
-    def _get_first_pixel_width_words_of_lines(self, line_words):
-        # Build the next line to return
-        section = ''
-        is_start_of_line = True
-        # Add words until the line would exceed the maximum length
-        while len(line_words) > 0:
-            # Add spaces before words but not at the start of the line
-            next_section = ''
-            if not is_start_of_line:
-                next_section += ' '
-            is_start_of_line = False
+    def set_text(self, text, x = None, y = None):
+        self.x = x or self.x
+        self.y = y or self.y
 
-            next_section += line_words[0]
-
-            if M5.Display.textWidth(section + next_section, self.font) > self.max_width_pixels:
-                return section
-
-            section += next_section
-            line_words.pop(0)
-
-        return section
-
-
-    def _split_to_lines(self, full_text):
-        # Split to 2D list of lines and words
-        all_lines = (l.split() for l in full_text.split('\n'))
-        all_lines = (l for l in all_lines if len(l) > 0)
-        all_lines = list(all_lines)
-
-        is_start_of_line = False
-
-        while len(all_lines) > 0:
-            # Take the first non-empty line
-            if len(all_lines[0]) == 0:
-                all_lines.pop(0)
-                if len(all_lines) == 0:
-                    # End the generator if there are no more lines
-                    return
-
-            # Build the next line to return
-            line_words = all_lines[0]
-            section = self._get_first_pixel_width_words_of_lines(line_words)
-
-            # If the next word is longer than the current line length
-            # Trim and return
-            if len(section) == 0:
-                section = self._get_first_pixel_width_chars(line_words[0])
-                line_words[0] = line_words[0][len(section):]
-
-            yield section
-            is_start_of_line = True
-
-
-    def set_text(self, text):
-        split_lines = list(self._split_to_lines(text))
+        split_lines = list(split_text_to_lines(text, self.font, self.max_width_pixels))
 
         self._assign_labels(split_lines)
-
-
-    def set_position(self, x, y):
-        self.x = x
-        self.y = y
-
-        self.set_text(self.text)
 
 
     def _assign_labels(self, lines):
         line_height = M5.Display.fontHeight(self.font)
 
+        while len(self.labels) > 0:
+            label = self.labels.pop(0)
+            label.set_visible(False)
+
         for i, j in enumerate(lines):
-            if i >= len(self.labels):
-                self._create_label(i * line_height)
-
-            # TODO: Only clear if the old text was longer
-            self.labels[i].set_text('')
-            self.labels[i].set_position(self.x, self.y + (i * line_height))
-            self.labels[i].set_text(lines[i])
-
-        for i in range(len(lines), len(self.labels)):
-            self.labels[i].set_position(self.x, self.y + (i * line_height))
-            self.labels[i].set_text('')
+            self._create_label(lines[i], self.x, self.y + (i * line_height))
 
         self.height = line_height * len(self.labels)
         self.width = self.max_width_pixels
 
-    def calculate_height_for_text(self, text):
-        lines = self._split_to_lines(text)
-        font_height = M5.Display.fontHeight(self.font)
-        return len(list(lines)) * font_height
 
-    def _create_label(self, y_offset):
+    def _create_label(self, text, x_pos, y_pos):
         label = EventLabel(
-            '',
-            self.x,
-            self.y + y_offset,
+            text,
+            x_pos,
+            y_pos,
             self.scale,
             self.fg_color,
             self.bg_color,
-            self.font
+            self.font,
+            self._text_alignment
         )
-
-        if self._text_alignment == 'left':
-            label.align_left()
-        elif self._text_alignment == 'centre':
-            label.align_centre()
-        elif self._text_alignment == 'right':
-            label.align_right()
-        else:
-            raise Error("Unknown horizontal alignment")
 
         self.labels.append(label)
 
-    def align_left(self):
-        self._text_alignment = 'left'
-        for label in self.labels:
-            label.align_left()
 
-    def align_centre(self):
-        self._text_alignment = 'centre'
-        for label in self.labels:
-            label.align_centre()
+    def redraw(self):
+        for l in self.labels:
+            l.redraw()
 
-    def align_right(self):
-        self._text_alignment = 'right'
-        for label in self.labels:
-            label.align_right()
 
-    def _align(self):
-        if self._text_alignment == 'left':
-            self.align_left()
-        elif self._text_alignment == 'centre':
-            self.align_centre()
-        elif self._text_alignment == 'right':
-            self.align_right()
-        else:
-            raise Error("Unknown horizontal alignment")
+    def set_visible(self, visible):
+        for l in self.labels:
+            l.set_visible(False)
 
 
 class EventTitleBar:
     event_label_coords = None
-
     background_rectangle = None
-
     event_label_battery = None
-
     event_label_time = None
 
     x = 0
@@ -680,6 +571,11 @@ class EventTitleBar:
 
     bg_color = None
     fg_color = None
+
+    _cur_battery_level = None
+    _cur_coords_x = None
+    _cur_coords_y = None
+    _cur_time = None
 
     def __init__(self, ui, fg_color, bg_color, font, display_width, initial_time, initial_coords):
         # Initialise properties
@@ -708,10 +604,10 @@ class EventTitleBar:
             1.0,
             fg_color,
             bg_color,
-            font
+            font,
+            align = 'left'
         )
         ui.add_element(self.event_label_coords)
-        self.event_label_coords.align_left()
 
         # Create time label in the middle
         self.event_label_time = EventLabel(
@@ -734,24 +630,18 @@ class EventTitleBar:
             1.0,
             fg_color,
             bg_color,
-            font
+            font,
+            align = 'right'
         )
         ui.add_element(self.event_label_battery)
-        self.event_label_battery.align_right()
-
-
-    def set_font(self, font):
-        self.font = font
-        self.height = M5.Display.fontHeight(font)
-
-        self.event_label_battery.set_font(font)
-        self.event_label_coords.set_font(font)
-
-        self.background_rectangle.set_size(self.width, self.height)
 
 
     def set_battery_percentage(self, battery_level):
         self.event_label_battery.set_text(self._format_battery_level_for_display(battery_level))
+
+        if battery_level != self._cur_battery_level:
+            self.redraw()
+        self._cur_battery_level = battery_level
 
 
     def _format_battery_level_for_display(self, battery_level):
@@ -761,6 +651,11 @@ class EventTitleBar:
     def set_coords(self, point_x, point_y):
         self.event_label_coords.set_text(self._format_coords_for_display(point_x, point_y))
 
+        if point_x != self._cur_coords_x and point_y != self._cur_coords_y:
+            self.redraw()
+        self._cur_coords_x = point_x
+        self._cur_coords_y = point_y
+
 
     def _format_coords_for_display(self, point_x, point_y):
         return f"({point_x}, {point_y})"
@@ -768,13 +663,25 @@ class EventTitleBar:
 
     def update_time(self):
         local_time = time.localtime()
-        self.event_label_time.set_text(self._format_time_for_display(local_time))
+        time_str = self._format_time_for_display(local_time)
+        self.event_label_time.set_text(time_str)
+
+        if time_str != self._cur_time:
+            self.redraw()
+        self._cur_time = time_str
 
 
     def _format_time_for_display(self, local_time):
         (year, month, month_day, hour, minute, second, week_day, year_day) = local_time
 
         return f"{hour:02}:{minute:02}"
+
+
+    def redraw(self):
+        self.background_rectangle.redraw()
+        self.event_label_coords.redraw()
+        self.event_label_battery.redraw()
+        self.event_label_time.redraw()
 
 # ================================
 # ================================
@@ -902,57 +809,26 @@ def on_background_click(touch_event_args) -> bool:
 # ================================
 # ================================
 
+
 def choose_and_display_next_word() -> bool:
+    global title_bar
     global last_word_refresh_time
     global label_word, label_definition, label_usage_title, label_usages
     global word_store
 
-    last_word_refresh_time = time.time()
-
-    random_word = word_store.next_word()
-
-    # Update the displayed word
-    label_word.set_text('')
-
-    # Calculate the height of the definition text
-    definition_text = '\n'.join(random_word.definitions)
-    definition_labels_height = label_definition.calculate_height_for_text(definition_text)
-
-    # Calculate the new Y position of the "Usages" word label
-    old_usages_label_y_position = label_usage_title.y
-    new_usages_label_y_position = label_definition.y + definition_labels_height
-
     # Clear the screen
-    label_definition.set_text('')
-    label_usage_title.set_text('')
-    label_usages.set_text('')
+    M5.Display.clear(0xffffff)
 
-    # Reposition the usages
-    label_usages.set_position(
-        label_usages.x,
-        new_usages_label_y_position + label_usage_title.height,
-    )
+    # Redraw the title bar
+    title_bar.redraw()
 
-    # Reposition the Usages title
-    label_usage_title.set_position(
-        int(SCREEN_HEIGHT // 2),
-        new_usages_label_y_position,
-    )
+    # Redraw the Next button
+    label_next_button.redraw()
 
-    # Write everything to the screen
-    label_word.set_text(random_word.word)
+    setup_ui()
 
-    label_definition.set_text(definition_text)
-    label_usage_title.set_text('Usages')
-
-    usages_text = '\n'.join(random_word.examples)
-    if len(usages_text) == 0:
-        usages_text = "N/A"
-
-    label_usages.set_text(usages_text)
-
-    # Prevent other onclick event handlers from running
     return True
+
 
 
 def get_label_centre_offset(label_text, label_font, screen_width):
@@ -964,11 +840,191 @@ def get_label_centre_offset(label_text, label_font, screen_width):
 def format_datetime(localtime):
     return f"{localtime[0]:04d}-{localtime[1]:02d}-{localtime[2]:02d} {localtime[3]:02d}:{localtime[4]:02d}:{localtime[5]:02d}"
 
+
+def _get_first_pixel_width_chars(seq, font, max_width_pixels):
+    # Build the next line to return
+    res = ''
+    # Add characters until the line would exceed the maximum length
+    while len(seq) > 0:
+        if M5.Display.textWidth(res + seq[0], font) > max_width_pixels:
+            break
+        res += seq[0]
+        seq = seq[1:]
+    return res
+
+
+def _get_first_pixel_width_words_of_lines(line_words, font, max_width_pixels):
+    # Build the next line to return
+    section = ''
+    is_start_of_line = True
+    # Add words until the line would exceed the maximum length
+    while len(line_words) > 0:
+        # Add spaces before words but not at the start of the line
+        next_section = ''
+        if not is_start_of_line:
+            next_section += ' '
+        is_start_of_line = False
+
+        next_section += line_words[0]
+
+        if M5.Display.textWidth(section + next_section, font) > max_width_pixels:
+            return section
+
+        section += next_section
+        line_words.pop(0)
+
+    return section
+
+
+def split_text_to_lines(full_text, font, max_width_pixels):
+    # Split to 2D list of lines and words
+    all_lines = (l.split() for l in full_text.split('\n'))
+    all_lines = (l for l in all_lines if len(l) > 0)
+    all_lines = list(all_lines)
+
+    is_start_of_line = False
+
+    while len(all_lines) > 0:
+        # Take the first non-empty line
+        if len(all_lines[0]) == 0:
+            all_lines.pop(0)
+            if len(all_lines) == 0:
+                # End the generator if there are no more lines
+                return
+
+        # Build the next line to return
+        line_words = all_lines[0]
+        section = _get_first_pixel_width_words_of_lines(line_words, font, max_width_pixels)
+
+        # If the next word is longer than the current line length
+        # Trim and return
+        if len(section) == 0:
+            section = _get_first_pixel_width_chars(line_words[0], font, max_width_pixels)
+            line_words[0] = line_words[0][len(section):]
+
+        yield section
+        is_start_of_line = True
+
+
+def calculate_height_for_multiline_text(text, font, max_width_pixels):
+    lines = split_text_to_lines(text, font, max_width_pixels)
+    font_height = M5.Display.fontHeight(font)
+    return len(list(lines)) * font_height
+
 # ================================
 # ================================
 # Setup/Loop methods
 # ================================
 # ================================
+
+
+def setup_ui():
+    global config
+    global word_store
+    global wifi
+    global ui, title_bar, label_word, label_next_button, label_definition
+    global label_usage_title, label_usages
+    global last_word_refresh_time
+    global battery_monitor
+
+    global SCREEN_HEIGHT, SCREEN_WIDTH
+
+    random_word = word_store.next_word()
+    last_word_refresh_time = time.time()
+
+    definition_text = '\n'.join(random_word.definitions)
+    usages_text = '\n'.join(random_word.examples)
+    if len(usages_text) == 0:
+        usages_text = "N/A"
+
+    # Display the title bar
+    if title_bar is None:
+        title_bar = EventTitleBar(
+            ui = ui,
+            fg_color = 0xffffff,
+            bg_color = 0x000000,
+            font = M5.Widgets.FONTS.Montserrat24,
+            display_width = SCREEN_HEIGHT,
+            initial_time = time.localtime(),
+            initial_coords = (SCREEN_HEIGHT, SCREEN_WIDTH)
+        )
+        ui.add_element(title_bar)
+
+    # Label to display the current word
+    ui.remove_element_or_none(label_word)
+    label_word = EventLabel(
+        random_word.word,
+        int(SCREEN_HEIGHT // 2),
+        title_bar.height + 5,
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat48,
+        align = 'centre'
+    )
+    ui.add_element(label_word)
+
+    # Label to display the definition(s) of the word
+    ui.remove_element_or_none(label_definition)
+    label_definition = WrappingEventLabel(
+        definition_text,
+        int(SCREEN_HEIGHT // 2),
+        title_bar.height + label_word.height + 5,
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat24,
+        SCREEN_HEIGHT,
+        align = 'centre'
+    )
+    ui.add_element(label_definition)
+
+    # Calculate the new Y position of the "Usages" word label
+    new_usages_label_y_position = label_definition.y + label_definition.height
+
+    # "Usage Example" Label
+    ui.remove_element_or_none(label_usage_title)
+    label_usage_title = EventLabel(
+        'Usages',
+        int(SCREEN_HEIGHT // 2),
+        new_usages_label_y_position,
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat40,
+        align = 'centre'
+    )
+    ui.add_element(label_usage_title)
+
+    # Label to display the usages(s) of the word
+    ui.remove_element_or_none(label_usages)
+    label_usages = WrappingEventLabel(
+        usages_text,
+        int(SCREEN_HEIGHT // 2),
+        new_usages_label_y_position + label_usage_title.height,
+        1.0,
+        0x000000,
+        0xffffff,
+        M5.Widgets.FONTS.Montserrat24,
+        SCREEN_HEIGHT,
+        align = 'centre'
+    )
+    ui.add_element(label_usages)
+
+    # Label acting as the "next word" button
+    if label_next_button is None:
+        label_next_button = EventLabel(
+            "Next",
+            SCREEN_HEIGHT,
+            SCREEN_WIDTH - M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
+            1.0,
+            0xffffff,
+            0x999999,
+            M5.Widgets.FONTS.Montserrat40,
+            align = 'right'
+        )
+        ui.add_element(label_next_button)
+        label_next_button.onclick.subscribe(on_next_word_click)
 
 
 def setup():
@@ -977,9 +1033,13 @@ def setup():
     global wifi
     global ui, title_bar, label_word, label_next_button, label_definition
     global label_usage_title, label_usages
+    global last_word_refresh_time
     global battery_monitor
 
     global SCREEN_HEIGHT, SCREEN_WIDTH
+
+    # Load the word dictionary into memory
+    word_store = WordStore()
 
     config = Config()
     config.load()
@@ -992,6 +1052,10 @@ def setup():
     M5.Widgets.fillScreen(0xeeeeee)
     M5.Display.setRotation(1)
 
+    M5.Display.setBrightness(100)
+
+    #TODO: These are used the wrong way round for legacy reasons.
+    # Just swap the names around at some point
     SCREEN_HEIGHT = M5.Display.width()
     SCREEN_WIDTH = M5.Display.height()
 
@@ -999,94 +1063,12 @@ def setup():
     ui = UserInterface()
     ui.background_onclick.subscribe(on_background_click)
 
-    # Display the title bar
-    title_bar = EventTitleBar(
-        ui = ui,
-        fg_color = 0xffffff,
-        bg_color = 0x000000,
-        font = M5.Widgets.FONTS.Montserrat18,
-        display_width = SCREEN_HEIGHT,
-        initial_time = time.localtime(),
-        initial_coords = (SCREEN_HEIGHT, SCREEN_WIDTH)
-    )
-    ui.add_element(title_bar)
-
-    # Label to display the current word
-    label_word = EventLabel(
-        "",
-        int(SCREEN_HEIGHT // 2),
-        title_bar.height + 5,
-        1.0,
-        0x000000,
-        0xffffff,
-        M5.Widgets.FONTS.Montserrat48
-    )
-    ui.add_element(label_word)
-    label_word.align_centre()
-
-    # Label to display the definition(s) of the word
-    label_definition = WrappingEventLabel(
-        '',
-        int(SCREEN_HEIGHT // 2),
-        title_bar.height + label_word.height + 5,
-        1.0,
-        0x000000,
-        0xffffff,
-        M5.Widgets.FONTS.Montserrat24,
-        SCREEN_HEIGHT,
-    )
-    ui.add_element(label_definition)
-    label_definition.align_centre()
-
-    # "Usage Example" Label
-    label_usage_title = EventLabel(
-        '',
-        int(SCREEN_HEIGHT // 2),
-        int(SCREEN_WIDTH // 2),
-        1.0,
-        0x000000,
-        0xffffff,
-        M5.Widgets.FONTS.Montserrat40
-    )
-    ui.add_element(label_usage_title)
-    label_usage_title.align_centre()
-
-    # Label to display the usages(s) of the word
-    label_usages = WrappingEventLabel(
-        '',
-        int(SCREEN_HEIGHT // 2),
-        int(SCREEN_WIDTH // 2) + M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
-        1.0,
-        0x000000,
-        0xffffff,
-        M5.Widgets.FONTS.Montserrat24,
-        SCREEN_HEIGHT,
-    )
-    ui.add_element(label_usages)
-    label_usages.align_centre()
-
-    # Label acting as the "next word" button
-    label_next_button = EventLabel(
-        "Next",
-        SCREEN_HEIGHT,
-        SCREEN_WIDTH - M5.Display.fontHeight(M5.Widgets.FONTS.Montserrat40),
-        1.0,
-        0xffffff,
-        0x999999,
-        M5.Widgets.FONTS.Montserrat40
-    )
-    ui.add_element(label_next_button)
-    label_next_button.align_right()
-    label_next_button.onclick.subscribe(on_next_word_click)
-
-    # Load the word dictionary into memory
-    word_store = WordStore()
-
-    choose_and_display_next_word()
+    setup_ui()
 
 
 async def refresh_display_loop():
     global config
+    global last_word_refresh_time
 
     # Update when the refresh period elapses
     curr_time = time.time()
