@@ -282,7 +282,7 @@ class UserInterface:
 
         self.all_elements.remove(element)
 
-    def triger_onclick_event(self, point_x, point_y):
+    def trigger_onclick_event(self, point_x, point_y):
         was_triggered = False
 
         event_args = TouchEventArgs(None, point_x, point_y)
@@ -1086,14 +1086,14 @@ async def touch_event_loop():
     global ui, title_bar, label_word
 
     if M5.Touch.getCount():
-        (deltaX, deltaY, distanceX, distancY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
+        (deltaX, deltaY, distanceX, distanceY, isPressed, wasPressed, wasClicked, isReleased, wasReleased, isHolding, wasHold) = M5.Touch.getDetail(0)
 
         if wasReleased:
             touch_x = M5.Touch.getX()
             touch_y = M5.Touch.getY()
             title_bar.set_coords(touch_x, touch_y)
 
-            ui.triger_onclick_event(touch_x, touch_y)
+            ui.trigger_onclick_event(touch_x, touch_y)
 
     M5.update()
 
