@@ -68,14 +68,16 @@ def populate_dictionary_definitions(dictionary_path: str, words: dict[str, WordI
 			# Normalise whitespace
 			definition = ' '.join(definition.split())
 
-			if definition and not word_info.definitions:
-				word_info.add_definition(definition)
+			if definition:
+				if len(word_info.definitions) == 0 or (len(definition) > len(word_info.definitions[0])):
+					word_info.add_definition(definition)
 
 			if not word_info.part_of_speech:
 				word_info.part_of_speech = part_of_speech
 
 			if example:
 				word_info.add_example(example)
+
 
 def populate_dictionary_pronounciations(phonetics_path: str, words: dict[str, WordInfo]) -> None:
 	with open(phonetics_path) as dictionary_file:
@@ -107,27 +109,12 @@ def normalise_word(word: str) -> str:
 	return word.lower()
 
 
+
 def pad_list(l: list, length: int) -> list:
 	return l + ([None] * (length - len(l)))
 
-# Dictionary mapping normalised words to their information
-wordinfos = load_words()
 
-# Populate defintions, part of speech, and examples from the dictionary files
-populate_dictionary_definitions(dictionary_path, wordinfos)
-populate_dictionary_definitions(dictionary2_path, wordinfos)
-populate_dictionary_definitions(custom_dictionary_path, wordinfos)
-
-# Populate pronounciations from the phonetics files
-populate_dictionary_pronounciations(custom_phonetics_path, wordinfos)
-populate_dictionary_pronounciations(phonetics_path, wordinfos)
-
-# Write the words in the new format to a json file
-# This will be loaded on the device
-write_words(wordinfos)
-
-# Display warnings
-for word in wordinfos.values():
+def check_for_warnings(word):
 	if len(word.definitions) == 0:
 		print("WARN: \"%s\" has no definitions" % word.word)
 
@@ -141,3 +128,25 @@ for word in wordinfos.values():
 	for u in word.examples:
 		if not u.isascii():
 			print("WARN: \"%s\" usage example(s) contain non-ASCII characters. They may render incorrectly." % word.word)
+
+
+if __name__ == "__main__":
+	# Dictionary mapping normalised words to their information
+	wordinfos = load_words()
+
+	# Populate defintions, part of speech, and examples from the dictionary files
+	populate_dictionary_definitions(dictionary_path, wordinfos)
+	populate_dictionary_definitions(dictionary2_path, wordinfos)
+	populate_dictionary_definitions(custom_dictionary_path, wordinfos)
+
+	# Populate pronounciations from the phonetics files
+	populate_dictionary_pronounciations(custom_phonetics_path, wordinfos)
+	populate_dictionary_pronounciations(phonetics_path, wordinfos)
+
+	# Write the words in the new format to a json file
+	# This will be loaded on the device
+	write_words(wordinfos)
+
+	# Display warnings
+	for word in wordinfos.values():
+		check_for_warnings(word)
