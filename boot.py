@@ -1,5 +1,63 @@
+# SPDX-FileCopyrightText: 2024 M5Stack Technology CO LTD
+#
+# SPDX-License-Identifier: MIT
+# boot.py
+import esp32
+
+"""
+boot_option:
+    0 -> Run main.py directly
+    1 -> Show startup menu and network setup
+    2 -> Only network setup
+
+Quick reference:
+    when use uiflow2.m5stack.com website, click RUN button to run workspace
+    code, boot_option won't change, if you click DOWNLOAD button to download
+    workspace code to device, boot_option will change to 2, it means after
+    download code done, device will auto reboot and won't show startup menu,
+    only do the network connect, but after network connect success, you can
+    still download or run workspace code. If you don't want do anything after
+    boot, you can delete this whole file. Cardputer Adv, StickS3, and StackChan
+    provide a startup override. During the 100ms detection window, hold the
+    Cardputer Adv top-left ESC-labeled key, StickS3 BtnA, or touch the StackChan
+    screen for at least 30ms. The device enters the startup menu without
+    deleting main.py and saves boot_option 1, so later boots continue to enter
+    startup until the boot option is changed.
+
+    BTW, the network connection time has a default timeout (60s), you can modify
+    the following definition to change this default value.
+"""
+
+NETWORK_TIMEOUT = 60
+_uiflow_run_main = True
+
 # Execute startup script, if not needed, delete the code below
 if __name__ == "__main__":
-    import main
+    from startup import BOOT_OPT_MENU_NET, BOOT_OPT_NETWORK, startup
+    from m5sync import sync
+    import os
 
-    main.start()
+    nvs = esp32.NVS("uiflow")
+    try:
+        boot_option = nvs.get_u8("boot_option")
+    except:
+        boot_option = 1  # default
+
+    boot_option = startup(boot_option, NETWORK_TIMEOUT)
+    _uiflow_run_main = boot_option != BOOT_OPT_MENU_NET
+    if boot_option == BOOT_OPT_NETWORK:
+        sync.run()
+    else:
+        print("Skip sync")
+
+    # copy OTA update file to main.py
+    # main_ota_temp.py this file name is fixed
+    try:
+        s = open("/flash/main_ota_temp.py", "rb")
+        f = open("/flash/main.py", "wb")
+        f.write(s.read())
+        s.close()
+        f.close()
+        os.remove("/flash/main_ota_temp.py")
+    except:
+        pass
