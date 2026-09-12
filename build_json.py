@@ -131,5 +131,13 @@ for word in wordinfos.values():
 	if len(word.definitions) == 0:
 		print("WARN: \"%s\" has no definitions" % word.word)
 
+	for d in word.definitions:
+		if not d.isascii():
+			print("WARN: \"%s\" definition(s) contain non-ASCII characters. They may render incorrectly." % word.word)
+
 	if len(word.examples) == 0:
 		print("WARN: \"%s\" has no usage examples" % word.word)
+
+	for u in word.examples:
+		if not u.isascii():
+			print("WARN: \"%s\" usage example(s) contain non-ASCII characters. They may render incorrectly." % word.word)
